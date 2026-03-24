@@ -58,6 +58,7 @@ uint32_t RadiaCode::unpackLE32(const uint8_t* buf) {
 RadiaCode::RadiaCode()
     : _connected(false)
     , _seq(0)
+    , _base_time(0)
     , _client_hdl(nullptr)
     , _dev_hdl(nullptr)
     , _out_xfer(nullptr)
@@ -109,6 +110,80 @@ void RadiaCode::disconnect() {
     }
     _connected = false;
     releaseUsbHost();
+}
+
+bool RadiaCode::init() {
+    if (!_connected) {
+        return false;
+    }
+
+    // ---- Step 1: drain stale data ----------------------------------------
+    drainStaleData();
+
+    // ---- Step 2: SET_EXCHANGE with payload 0x01 0xff 0x12 0xff -------------
+    {
+        std::vector<uint8_t> args = { 0x01, 0xff, 0x12, 0xff };
+        std::vector<uint8_t> resp;
+        Error err = sendCommand(COMMAND::SET_EXCHANGE, args, resp);
+        if (err != Error::OK) {
+            return false;
+        }
+    }
+
+    // ---- Step 3: SET_TIME with current time (Unix timestamp LE uint32) -----
+    {
+        uint32_t now_sec = getCurrentTimeSec();
+        std::vector<uint8_t> args(4);
+        packLE32(args.data(), now_sec);
+        std::vector<uint8_t> resp;
+        Error err = sendCommand(COMMAND::SET_TIME, args, resp);
+        if (err != Error::OK) {
+            return false;
+        }
+    }
+
+    // ---- Step 4: Write DEVICE_TIME to VSFR 0x0504 with value 0 -----------
+    {
+        std::vector<uint8_t> req = write_request(0x0504, 0);
+        std::vector<uint8_t> resp;
+        Error err = execute(req, resp);
+        if (err != Error::OK) {
+            return false;
+        }
+    }
+
+    // ---- Step 5: Compute base_time = now() + 128 seconds ------------------
+    _base_time = getCurrentTimeSec() + 128;
+
+    // ---- Step 6: Read firmware version (GET_VERSION) and log it -----------
+    {
+        std::vector<uint8_t> resp;
+        Error err = sendCommand(COMMAND::GET_VERSION, {}, resp);
+        if (err == Error::OK && !resp.empty()) {
+            // Version string is null-terminated text in response bytes
+#ifdef ARDUINO
+            char ver_str[64] = {0};
+            size_t copy_len = resp.size() < sizeof(ver_str) - 1 ? resp.size() : sizeof(ver_str) - 1;
+            memcpy(ver_str, resp.data(), copy_len);
+            Serial.print("[RadiaCode] Firmware version: ");
+            Serial.println(ver_str);
+#endif
+        }
+        // Non-fatal: proceed even if GET_VERSION fails
+    }
+
+    return true;
+}
+
+// Internal helper: returns current time as Unix seconds.
+// On Arduino: uses ESP-IDF time(). In unit tests: returns a fixed value.
+uint32_t RadiaCode::getCurrentTimeSec() {
+#ifdef ARDUINO
+    return static_cast<uint32_t>(time(nullptr));
+#else
+    // In unit-test context, return a known fixed value
+    return 1700000000UL;  // 2023-11-14 22:13:20 UTC (arbitrary, deterministic)
+#endif
 }
 
 std::vector<uint8_t> RadiaCode::buildRequest(uint16_t command_id,

@@ -120,12 +120,27 @@ public:
     // with `value` (4-byte LE uint32). Does NOT call execute().
     std::vector<uint8_t> write_request(uint16_t vsfr_id, uint32_t value);
 
+    // Initialize the RadiaCode device after USB connection.
+    // Performs the full init sequence:
+    //   1. drain stale data
+    //   2. SET_EXCHANGE(0x0007) with payload 0x01ff12ff
+    //   3. SET_TIME(0x0A04) with current datetime
+    //   4. Write DEVICE_TIME to VSFR 0x0504 with value 0
+    //   5. Compute and store base_time = now() + 128 seconds
+    //   6. Read and log firmware version (GET_VERSION)
+    // Returns true on success, false on any failure.
+    bool init();
+
     // Current sequence number (0-31)
     uint8_t getSeq() const { return _seq; }
+
+    // base_time in Unix seconds (set during init(), used for data buffer decoding)
+    uint32_t getBaseTime() const { return _base_time; }
 
 private:
     bool _connected;
     uint8_t _seq;               // 0-31, increments on each buildRequest()
+    uint32_t _base_time;        // Unix seconds; set in init() = now() + 128s
 
     usb_host_client_handle_t _client_hdl;
     usb_device_handle_t _dev_hdl;
@@ -160,6 +175,10 @@ private:
 
     // Helper: unpack a uint32_t from 4 little-endian bytes.
     static uint32_t unpackLE32(const uint8_t* buf);
+
+    // Get current time as Unix seconds (wraps time()/millis() on device;
+    // returns fixed value in unit tests).
+    uint32_t getCurrentTimeSec();
 };
 
 } // namespace radiacode
