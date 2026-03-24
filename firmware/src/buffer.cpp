@@ -9,6 +9,7 @@
 
 // File paths on LittleFS
 static const char* READINGS_FILE = "/readings.bin";
+static const char* STATUS_FILE   = "/readings_status.bin";
 static const char* INDEX_FILE    = "/readings_idx.bin";
 
 // Index file layout: uint32_t[3] = { depth, lifetimeLogged, lifetimeUploaded }
@@ -92,9 +93,71 @@ BufferStats ReadingBuffer::getStats() const {
 }
 
 bool ReadingBuffer::appendReading(const Reading& r) {
-    // Stub: LittleFS write not yet implemented.
-    (void)r;
-    return false;
+    // Open /readings.bin in append mode.
+    File f = LittleFS.open(READINGS_FILE, "a");
+    if (!f) {
+        return false;
+    }
+
+    // Serialize the reading into a 34-byte binary record.
+    // Layout: float lat(4) + float lon(4) + float dose_rate(4)
+    //   + float count_rate(4) + uint32_t timestamp(4) + float accuracy(4)
+    //   + float altitude(4) + uint16_t speed_mph_x10(2)
+    //   + uint16_t speed_kph_x10(2) + uint16_t heading_x10(2) = 34 bytes
+    uint8_t record[READING_BINARY_SIZE];
+    size_t offset = 0;
+
+    // Helper: write a float (4 bytes) into record at offset.
+    auto writeFloat = [&](float val) {
+        memcpy(&record[offset], &val, sizeof(float));
+        offset += sizeof(float);
+    };
+    // Helper: write a uint32_t (4 bytes) into record at offset.
+    auto writeU32 = [&](uint32_t val) {
+        memcpy(&record[offset], &val, sizeof(uint32_t));
+        offset += sizeof(uint32_t);
+    };
+    // Helper: write a uint16_t (2 bytes) into record at offset.
+    auto writeU16 = [&](uint16_t val) {
+        memcpy(&record[offset], &val, sizeof(uint16_t));
+        offset += sizeof(uint16_t);
+    };
+
+    writeFloat(r.lat);
+    writeFloat(r.lon);
+    writeFloat(r.dose_rate);
+    writeFloat(r.count_rate);
+    writeU32(r.timestamp);
+    writeFloat(r.accuracy);
+    writeFloat(r.altitude);
+    writeU16(static_cast<uint16_t>(r.speed_mph * 10.0f));
+    writeU16(static_cast<uint16_t>(r.speed_kph * 10.0f));
+    writeU16(static_cast<uint16_t>(r.heading * 10.0f));
+
+    // Write exactly READING_BINARY_SIZE bytes.
+    size_t written = f.write(record, READING_BINARY_SIZE);
+    f.close();
+    if (written != READING_BINARY_SIZE) {
+        return false;
+    }
+
+    // Append a status byte (0 = pending) to /readings_status.bin.
+    File sf = LittleFS.open(STATUS_FILE, "a");
+    if (!sf) {
+        return false;
+    }
+    uint8_t pending = 0;
+    size_t sw = sf.write(&pending, 1);
+    sf.close();
+    if (sw != 1) {
+        return false;
+    }
+
+    // Update in-memory counters and persist index.
+    _depth++;
+    _lifetimeLogged++;
+
+    return _saveIndex();
 }
 
 uint32_t ReadingBuffer::getUnuploaded(Reading* buf, uint32_t count) {

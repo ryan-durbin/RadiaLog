@@ -12,13 +12,15 @@
 
 // Binary serialization size for on-disk storage (compact packed format).
 // The in-memory struct uses full-width types for convenience; the binary
-// writer (buffer.cpp, implemented later) packs fields into this footprint:
-//   uint32_t id(4) + float lat(4) + float lon(4) + float dose_rate(4)
-//   + float count_rate(4) + uint32_t timestamp(4) + uint8_t accuracy(1)
-//   + int16_t altitude(2) + uint8_t speed_mph(1) + uint8_t speed_kph(1)
-//   + uint16_t heading(2) + uint8_t altitude_accuracy(1) + uint8_t uploaded(1)
-//   + uint8_t _reserved(1)
+// writer (buffer.cpp) packs fields into this footprint:
+//   float lat(4) + float lon(4) + float dose_rate(4) + float count_rate(4)
+//   + uint32_t timestamp(4) + float accuracy(4) + float altitude(4)
+//   + uint16_t speed_mph_x10(2) + uint16_t speed_kph_x10(2)
+//   + uint16_t heading_x10(2)
 //   = 34 bytes total
+// Note: altitude_accuracy is dropped from binary to fit 34 bytes.
+// Upload status is tracked in a parallel /readings_status.bin file.
+// Reading ID is not stored in binary; it is (lifetimeLogged) at time of append.
 static const uint8_t READING_BINARY_SIZE = 34;
 
 // Compile-time verification
