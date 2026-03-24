@@ -276,6 +276,110 @@ Error RadiaCode::sendCommand(COMMAND command_id,
     return execute(request, response);
 }
 
+std::vector<RadiaCodeReading> RadiaCode::readDataBuf() {
+    // Build the read request for VS.DATA_BUF (0x0100)
+    std::vector<uint8_t> request = read_request(VS::DATA_BUF);
+    std::vector<uint8_t> response;
+
+    Error err = execute(request, response);
+    if (err != Error::OK || response.empty()) {
+        return {};  // Empty or error
+    }
+
+    // The response from execute() contains the raw command response.
+    // Skip the 4-byte command header (cmd_id(2) + 0x00 + seq) to get data payload.
+    if (response.size() <= 4) {
+        return {};  // No data payload beyond header
+    }
+
+    const uint8_t* data = response.data() + 4;
+    size_t data_len = response.size() - 4;
+
+    uint64_t base_time_ms = static_cast<uint64_t>(_base_time) * 1000ULL;
+
+    return parseDataBuf(data, data_len, base_time_ms);
+}
+
+std::vector<RadiaCodeReading> RadiaCode::parseDataBuf(const uint8_t* data,
+                                                       size_t len,
+                                                       uint64_t base_time_ms) {
+    std::vector<RadiaCodeReading> readings;
+
+    if (data == nullptr || len == 0) {
+        return readings;
+    }
+
+    // Record header: 7 bytes
+    //   seq(1) + eid(1) + gid(1) + ts_offset(4 LE int32)
+    // RealTimeData payload (gid=0): 13 bytes
+    //   count_rate(float4) + dose_rate(float4) + count_rate_err(uint16) +
+    //   dose_rate_err(uint16) + flags(uint16) + rt_flags(uint8)
+    //   = struct <ffHHHB = 4+4+2+2+2+1 = 15 bytes
+
+    static constexpr size_t HEADER_SIZE = 7;
+    static constexpr size_t REALTIME_DATA_SIZE = 15;  // ffHHHB = 4+4+2+2+2+1
+
+    size_t offset = 0;
+
+    while (offset + HEADER_SIZE <= len) {
+        // Parse 7-byte header
+        uint8_t rec_seq = data[offset];
+        uint8_t eid = data[offset + 1];
+        uint8_t gid = data[offset + 2];
+        int32_t ts_offset;
+        std::memcpy(&ts_offset, data + offset + 3, 4);
+        // ts_offset is LE int32 — on little-endian ESP32 this is correct as-is
+        // For portability, decode explicitly:
+        ts_offset = static_cast<int32_t>(
+            static_cast<uint32_t>(data[offset + 3]) |
+            (static_cast<uint32_t>(data[offset + 4]) << 8) |
+            (static_cast<uint32_t>(data[offset + 5]) << 16) |
+            (static_cast<uint32_t>(data[offset + 6]) << 24)
+        );
+
+        offset += HEADER_SIZE;
+
+        if (gid == 0) {
+            // RealTimeData: decode struct <ffHHHB
+            if (offset + REALTIME_DATA_SIZE > len) {
+                break;  // Not enough data for this record
+            }
+
+            RadiaCodeReading reading;
+
+            // count_rate: float (4 bytes LE)
+            std::memcpy(&reading.count_rate, data + offset, 4);
+            // dose_rate: float (4 bytes LE)
+            std::memcpy(&reading.dose_rate, data + offset + 4, 4);
+            // count_rate_err: uint16 LE
+            reading.count_rate_err = static_cast<uint16_t>(data[offset + 8]) |
+                                     (static_cast<uint16_t>(data[offset + 9]) << 8);
+            // dose_rate_err: uint16 LE
+            reading.dose_rate_err = static_cast<uint16_t>(data[offset + 10]) |
+                                    (static_cast<uint16_t>(data[offset + 11]) << 8);
+            // flags: uint16 LE (skip — not stored in RadiaCodeReading)
+            // rt_flags: uint8 (skip — not stored in RadiaCodeReading)
+
+            // Timestamp: base_time + ts_offset * 10 ms
+            uint64_t ts_ms = base_time_ms + static_cast<int64_t>(ts_offset) * 10LL;
+            reading.timestamp = static_cast<uint32_t>(ts_ms / 1000ULL);
+
+            readings.push_back(reading);
+            offset += REALTIME_DATA_SIZE;
+        } else {
+            // Unknown record type — we need to skip it but we don't know its size.
+            // The protocol doesn't have a generic length field per record beyond the header.
+            // For gid != 0 records, we skip based on known sizes.
+            // gid=1: EnergySpectrum, gid=2: DoseHistory, etc.
+            // For now, break out since we can't determine the payload size.
+            // In practice, DATA_BUF typically only contains RealTimeData records.
+            break;
+        }
+    }
+
+    return readings;
+}
+
 std::vector<uint8_t> RadiaCode::read_request(VS vs_id) {
     // RD_VIRT_STRING args: 2-byte LE virtual store ID
     uint16_t id = static_cast<uint16_t>(vs_id);

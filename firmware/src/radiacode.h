@@ -28,6 +28,17 @@ typedef void* usb_transfer_t;
 
 namespace radiacode {
 
+// ---- RadiaCodeReading struct -------------------------------------------
+// Decoded real-time data reading from the RadiaCode data buffer.
+
+struct RadiaCodeReading {
+    float count_rate;          // Counts per second
+    float dose_rate;           // Dose rate (µSv/h)
+    uint32_t timestamp;        // Unix timestamp in milliseconds
+    uint16_t count_rate_err;   // Count rate error
+    uint16_t dose_rate_err;    // Dose rate error
+};
+
 // ---- Protocol command IDs ----------------------------------------------
 
 enum class COMMAND : uint16_t {
@@ -130,6 +141,20 @@ public:
     //   6. Read and log firmware version (GET_VERSION)
     // Returns true on success, false on any failure.
     bool init();
+
+    // Read and decode the data buffer from the RadiaCode.
+    // Returns a vector of RadiaCodeReading structs decoded from the DATA_BUF.
+    // Only decodes RealTimeData records (gid=0); skips other record types.
+    // Returns an empty vector if the buffer is empty or on error.
+    std::vector<RadiaCodeReading> readDataBuf();
+
+    // Parse raw data buffer bytes into RadiaCodeReading structs.
+    // Static helper so it can be unit-tested without a connected device.
+    // `data`: raw response payload from VS.DATA_BUF read (after command header).
+    // `base_time_ms`: base time in milliseconds for timestamp computation.
+    static std::vector<RadiaCodeReading> parseDataBuf(const uint8_t* data,
+                                                       size_t len,
+                                                       uint64_t base_time_ms);
 
     // Current sequence number (0-31)
     uint8_t getSeq() const { return _seq; }
