@@ -1,35 +1,45 @@
 #pragma once
-#ifndef WIFI_MGR_H
-#define WIFI_MGR_H
 
 #include <Arduino.h>
-#include "config_mgr.h"
+#include <WiFi.h>
+#include "config.h"
 
 // =============================================================================
 // RadiaLog Firmware - WiFi Manager
-// Manages both AP mode (config portal) and STA mode (upload).
+// Manages AP+STA dual mode (WIFI_AP_STA).
+// AP: always broadcasts RadiaLog-XXXX (last 4 hex of MAC)
+// STA: connects to configured networks for data upload
 // =============================================================================
 
 class WifiMgr {
 public:
     WifiMgr();
 
-    /// Start WiFi: AP mode always on, STA mode if credentials in config.
-    void begin(ConfigMgr& cfg);
+    /// Initialize WiFi in WIFI_AP_STA mode.
+    /// Sets up AP with RadiaLog-XXXX SSID (XXXX = last 4 of MAC).
+    /// apPassword: empty string = open network
+    void begin(const String& apPassword = "");
 
     /// Returns true if STA mode has an active internet connection.
-    bool isStaConnected() const;
+    bool isSTAConnected() const;
 
-    /// Returns RSSI of current STA connection, or 0 if not connected.
-    int getStaRSSI() const;
+    /// Returns the STA IP address (or 0.0.0.0 if not connected).
+    IPAddress getSTAIP() const;
 
-    /// Returns number of clients connected to the AP.
-    int getApClients() const;
+    /// Returns the AP IP address.
+    IPAddress getAPIP() const;
+
+    /// Returns RSSI of current STA connection (dBm), or 0 if not connected.
+    int getSignalStrength() const;
+
+    /// Returns current STA SSID, or empty string if not connected.
+    String getSSID() const;
 
 private:
-    bool _staConnected;
-    int  _staRSSI;
-    int  _apClients;
-};
+    void _setupAP(const String& password);
+    String _buildAPSsid();
 
-#endif // WIFI_MGR_H
+    bool      _staConnected;
+    IPAddress _apIP;
+    String    _apSsid;
+};
