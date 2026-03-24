@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cat progress-*.txt)",
+      "WebSearch",
+      "WebFetch(domain:www.espboards.dev)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:homeding.github.io)",
+      "Bash(pio run:*)",
+      "Read(//home/ryandurbin/.platformio/penv/**)",
+      "Read(//home/ryandurbin/.local/bin/**)",
+      "Bash(find / -name pio -type f)"
+    ]
+  }
+}

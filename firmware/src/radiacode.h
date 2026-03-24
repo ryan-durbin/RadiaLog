@@ -18,14 +18,6 @@
 #include <stdint.h>
 #include <vector>
 
-// Forward declare ESP-IDF USB Host types to avoid pulling in the full headers
-// at include time (they define C structs that conflict with Arduino framework
-// in some build paths). The .cpp includes usb/usb_host.h directly.
-struct usb_host_client_event_msg_t;
-typedef void* usb_host_client_handle_t;
-typedef void* usb_device_handle_t;
-typedef void* usb_transfer_t;
-
 namespace radiacode {
 
 // ---- RadiaCodeReading struct -------------------------------------------
@@ -78,6 +70,14 @@ enum class Error {
 
 class RadiaCode {
 public:
+    // RadiaCode USB device identifiers
+    static constexpr uint16_t VID = 0x0483;  // STMicroelectronics
+    static constexpr uint16_t PID = 0xF123;  // RadiaCode firmware
+
+    // USB bulk endpoints
+    static constexpr uint8_t EP_OUT = 0x01;
+    static constexpr uint8_t EP_IN  = 0x81;
+
     // Timeout for USB bulk reads (milliseconds)
     static constexpr uint32_t USB_TIMEOUT_MS = 3000;
 
@@ -167,10 +167,10 @@ private:
     uint8_t _seq;               // 0-31, increments on each buildRequest()
     uint32_t _base_time;        // Unix seconds; set in init() = now() + 128s
 
-    usb_host_client_handle_t _client_hdl;
-    usb_device_handle_t _dev_hdl;
-    usb_transfer_t* _out_xfer;  // re-usable OUT transfer buffer
-    usb_transfer_t* _in_xfer;   // re-usable IN transfer buffer
+    void* _client_hdl;  // usb_host_client_handle_t (opaque in header)
+    void* _dev_hdl;     // usb_device_handle_t
+    void* _out_xfer;    // usb_transfer_t* (OUT bulk transfer)
+    void* _in_xfer;     // usb_transfer_t* (IN bulk transfer)
 
     // Write raw bytes to USB write endpoint (0x01).
     Error usbWrite(const uint8_t* data, size_t len);

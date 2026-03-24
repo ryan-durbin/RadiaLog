@@ -41,6 +41,7 @@ struct Reading {
     float    heading;           ///< Heading (degrees, 0-360)
     float    altitude_accuracy; ///< GPS vertical accuracy (m)
     bool     uploaded;          ///< true if uploaded to server
+    bool     gps_valid;         ///< true if GPS had a fix at time of reading
 };
 
 // =============================================================================
@@ -50,6 +51,7 @@ struct Reading {
 /// Statistics about the reading buffer.
 struct BufferStats {
     uint32_t depth;              ///< Number of readings currently in buffer
+    uint32_t pending;            ///< Readings in buffer awaiting upload
     uint32_t lifetimeLogged;     ///< Total readings ever appended (including pruned)
     uint32_t lifetimeUploaded;   ///< Total readings ever marked as uploaded
 };
@@ -90,6 +92,7 @@ private:
     uint32_t _depth;             ///< Current number of stored readings
     uint32_t _lifetimeLogged;    ///< Total readings ever appended
     uint32_t _lifetimeUploaded;  ///< Total readings ever uploaded
+    uint32_t _uploadedInBuffer;  ///< Readings in buffer already uploaded
 
     /// Persist stats counters to /readings_idx.bin (write-through).
     bool _saveIndex();

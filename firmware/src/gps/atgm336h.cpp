@@ -1,8 +1,8 @@
 #include "atgm336h.h"
 
 // =============================================================================
-// RadiaLog Firmware - ATGM336H GPS Driver Stub Implementation
-// Real implementation uses TinyGPSPlus to parse NMEA sentences.
+// RadiaLog Firmware - ATGM336H GPS Driver Implementation
+// Reads NMEA sentences from UART and parses via TinyGPSPlus.
 // =============================================================================
 
 ATGM336H::ATGM336H(HardwareSerial& serial, int txPin, int rxPin, uint32_t baud)
@@ -22,15 +22,51 @@ ATGM336H::ATGM336H(HardwareSerial& serial, int txPin, int rxPin, uint32_t baud)
 }
 
 void ATGM336H::begin() {
-    // Stub: no UART initialization
-    // Real implementation:
-    //   _serial.begin(_baud, SERIAL_8N1, _rxPin, _txPin);
+    _serial.begin(_baud, SERIAL_8N1, _rxPin, _txPin);
 }
 
 bool ATGM336H::poll() {
-    // Stub: no NMEA parsing — always returns false (no fix)
-    // Real implementation: read from _serial, feed to TinyGPSPlus
-    return false;
+    bool newData = false;
+
+    // Feed all available bytes to TinyGPSPlus
+    while (_serial.available() > 0) {
+        char c = _serial.read();
+        if (_gps.encode(c)) {
+            newData = true;
+        }
+    }
+
+    // Update cached values from parsed NMEA data
+    if (_gps.location.isValid() && _gps.location.isUpdated()) {
+        _hasFix = true;
+        _lat = _gps.location.lat();
+        _lon = _gps.location.lng();
+    } else if (!_gps.location.isValid()) {
+        _hasFix = false;
+    }
+
+    if (_gps.altitude.isValid()) {
+        _alt = static_cast<float>(_gps.altitude.meters());
+    }
+
+    if (_gps.speed.isValid()) {
+        _speed = static_cast<float>(_gps.speed.kmph());
+    }
+
+    if (_gps.course.isValid()) {
+        _heading = static_cast<float>(_gps.course.deg());
+    }
+
+    if (_gps.satellites.isValid()) {
+        _satellites = _gps.satellites.value();
+    }
+
+    // HDOP as accuracy estimate: HDOP * 5m baseline ≈ horizontal accuracy
+    if (_gps.hdop.isValid() && _gps.hdop.hdop() > 0.0) {
+        _accuracy = static_cast<float>(_gps.hdop.hdop() * 5.0);
+    }
+
+    return newData;
 }
 
 bool ATGM336H::hasFix() const {

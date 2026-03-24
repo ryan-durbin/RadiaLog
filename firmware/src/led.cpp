@@ -17,7 +17,9 @@ Led::Led()
 }
 
 void Led::begin() {
+#if LED_PIN >= 0
     pinMode(LED_PIN, OUTPUT);
+#endif
     _setLed(false);
 }
 
@@ -117,5 +119,7 @@ void Led::update() {
 
 void Led::_setLed(bool on) {
     _ledState = on;
+#if LED_PIN >= 0
     digitalWrite(LED_PIN, on ? HIGH : LOW);
+#endif
 }

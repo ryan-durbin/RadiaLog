@@ -546,8 +546,8 @@ Error RadiaCode::findAndOpenDevice() {
         ret = usb_host_get_device_descriptor(
             reinterpret_cast<usb_device_handle_t>(tmp_hdl), &dev_desc);
         if (ret == ESP_OK && dev_desc) {
-            if (dev_desc->idVendor == RADIACODE_VID &&
-                dev_desc->idProduct == RADIACODE_PID) {
+            if (dev_desc->idVendor == RadiaCode::VID &&
+                dev_desc->idProduct == RadiaCode::PID) {
                 _dev_hdl = tmp_hdl;
                 return Error::OK;
             }
@@ -587,7 +587,7 @@ Error RadiaCode::claimInterface() {
     }
     usb_transfer_t* out_xfer = reinterpret_cast<usb_transfer_t*>(_out_xfer);
     out_xfer->device_handle = reinterpret_cast<usb_device_handle_t>(_dev_hdl);
-    out_xfer->bEndpointAddress = USB_WRITE_EP;  // 0x01
+    out_xfer->bEndpointAddress = RadiaCode::EP_OUT;  // 0x01
     out_xfer->callback = nullptr;
     out_xfer->context = nullptr;
     out_xfer->timeout_ms = USB_TIMEOUT_MS;
@@ -602,7 +602,7 @@ Error RadiaCode::claimInterface() {
     }
     usb_transfer_t* in_xfer = reinterpret_cast<usb_transfer_t*>(_in_xfer);
     in_xfer->device_handle = reinterpret_cast<usb_device_handle_t>(_dev_hdl);
-    in_xfer->bEndpointAddress = USB_READ_EP;  // 0x81
+    in_xfer->bEndpointAddress = RadiaCode::EP_IN;  // 0x81
     in_xfer->callback = nullptr;
     in_xfer->context = nullptr;
     in_xfer->timeout_ms = USB_TIMEOUT_MS;

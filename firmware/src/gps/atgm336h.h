@@ -3,6 +3,7 @@
 #define ATGM336H_H
 
 #include <Arduino.h>
+#include <TinyGPSPlus.h>
 #include "gps.h"
 
 // =============================================================================
@@ -32,6 +33,7 @@ public:
 
 private:
     HardwareSerial& _serial;
+    TinyGPSPlus     _gps;
     int      _txPin;
     int      _rxPin;
     uint32_t _baud;

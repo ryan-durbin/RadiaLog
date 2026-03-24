@@ -21,32 +21,42 @@ public:
     bool save();
 
     // --- WiFi credentials ---
-    /// Number of configured WiFi networks (0 if none)
     int     getWifiCount() const;
-    /// SSID for network at index i (empty string if out of range)
     String  getWifiSSID(int i) const;
-    /// Password for network at index i (empty string if out of range)
     String  getWifiPass(int i) const;
+    void    setWifi(int i, const String& ssid, const String& pass);
+    void    removeWifi(int i);
 
     // --- Upload ---
-    /// Bearer token for upload API
     String  getToken() const;
-    /// Upload endpoint URL
+    void    setToken(const String& token);
     String  getUploadUrl() const;
-    /// Unique device identifier
+    void    setUploadUrl(const String& url);
     String  getDeviceId() const;
-    /// Interval between readings in milliseconds
+    void    setDeviceId(const String& id);
+
+    // --- Device ---
+    String   getDeviceName() const;
+    void     setDeviceName(const String& name);
     uint32_t getReadingIntervalMs() const;
+    void     setReadingIntervalMs(uint32_t ms);
+
+    // --- AP ---
+    String  getApPassword() const;
+    void    setApPassword(const String& pass);
+
+    static constexpr int MAX_WIFI = 4;
 
 private:
-    // Stored values
-    String   _wifiSSID[4];
-    String   _wifiPass[4];
+    String   _wifiSSID[MAX_WIFI];
+    String   _wifiPass[MAX_WIFI];
     int      _wifiCount;
     String   _token;
     String   _uploadUrl;
     String   _deviceId;
+    String   _deviceName;
     uint32_t _readingIntervalMs;
+    String   _apPassword;
 };
 
 #endif // CONFIG_MGR_H

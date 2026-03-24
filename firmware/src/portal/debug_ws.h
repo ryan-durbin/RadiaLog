@@ -14,21 +14,21 @@
 // Log level enumeration (ordered: ERROR < WARN < INFO < DEBUG)
 // ---------------------------------------------------------------------------
 enum LogLevel {
-    ERROR = 0,
-    WARN  = 1,
-    INFO  = 2,
-    DEBUG = 3
+    LVL_ERROR = 0,
+    LVL_WARN  = 1,
+    LVL_INFO  = 2,
+    LVL_DEBUG = 3
 };
 
 // ---------------------------------------------------------------------------
-// Log module tags
+// Log module tags (prefixed to avoid collisions with class/type names)
 // ---------------------------------------------------------------------------
 enum LogModule {
-    USB    = 0,
-    GPS    = 1,
-    WIFI   = 2,
-    UPLOAD = 3,
-    BUFFER = 4
+    MOD_USB    = 0,
+    MOD_GPS    = 1,
+    MOD_WIFI   = 2,
+    MOD_UPLOAD = 3,
+    MOD_BUFFER = 4
 };
 
 // ---------------------------------------------------------------------------

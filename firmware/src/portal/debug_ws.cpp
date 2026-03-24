@@ -17,7 +17,7 @@ DebugWS::DebugWS()
     : _ws(nullptr)
     , _head(0)
     , _count(0)
-    , _minLevel(INFO)
+    , _minLevel(LVL_INFO)
 {
 }
 
@@ -36,9 +36,14 @@ void DebugWS::begin(AsyncWebServer* server) {
         _onEvent(server, client, type, arg, data, len);
     });
 
-    server->addHandler(_ws);
-
-    Serial.println("[DEBUG_WS] WebSocket registered at /ws/debug");
+    // Server may be nullptr during early init; portal registers the
+    // WebSocket handler later via getSocket().
+    if (server != nullptr) {
+        server->addHandler(_ws);
+        Serial.println("[DEBUG_WS] WebSocket registered at /ws/debug");
+    } else {
+        Serial.println("[DEBUG_WS] WebSocket created (server registration deferred)");
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -133,12 +138,12 @@ void DebugWS::_onEvent(AsyncWebSocket* server,
 // ---------------------------------------------------------------------------
 const char* DebugWS::_moduleStr(LogModule module) const {
     switch (module) {
-        case USB:    return "USB";
-        case GPS:    return "GPS";
-        case WIFI:   return "WIFI";
-        case UPLOAD: return "UPLOAD";
-        case BUFFER: return "BUFFER";
-        default:     return "UNKNOWN";
+        case MOD_USB:    return "USB";
+        case MOD_GPS:    return "GPS";
+        case MOD_WIFI:   return "WIFI";
+        case MOD_UPLOAD: return "UPLOAD";
+        case MOD_BUFFER: return "BUFFER";
+        default:         return "UNKNOWN";
     }
 }
 
@@ -147,11 +152,11 @@ const char* DebugWS::_moduleStr(LogModule module) const {
 // ---------------------------------------------------------------------------
 const char* DebugWS::_levelStr(LogLevel level) const {
     switch (level) {
-        case ERROR: return "ERROR";
-        case WARN:  return "WARN";
-        case INFO:  return "INFO";
-        case DEBUG: return "DEBUG";
-        default:    return "UNKNOWN";
+        case LVL_ERROR: return "ERROR";
+        case LVL_WARN:  return "WARN";
+        case LVL_INFO:  return "INFO";
+        case LVL_DEBUG: return "DEBUG";
+        default:        return "UNKNOWN";
     }
 }
 

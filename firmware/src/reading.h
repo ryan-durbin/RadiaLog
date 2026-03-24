@@ -1,29 +1,9 @@
 #pragma once
-#ifndef READING_H
-#define READING_H
-
-#include <stdint.h>
-#include <stdbool.h>
 
 // =============================================================================
-// RadiaLog Firmware - Canonical Reading Struct
-// Used by main.cpp integration to merge GPS + radiation data
+// RadiaLog Firmware - Reading Struct
+// Canonical definition lives in buffer.h. This header exists for convenience
+// so that modules can include "reading.h" without pulling in buffer internals.
 // =============================================================================
 
-/// A single merged radiation + GPS reading record.
-struct Reading {
-    uint32_t timestamp;           ///< Unix epoch seconds
-    double   lat;                 ///< Latitude (degrees, double precision)
-    double   lon;                 ///< Longitude (degrees, double precision)
-    float    dose_rate;           ///< Dose rate (µSv/h)
-    float    count_rate;          ///< Count rate (CPS)
-    float    altitude;            ///< Altitude (m)
-    float    speed_mph;           ///< Speed (mph)
-    float    speed_kph;           ///< Speed (km/h)
-    float    heading;             ///< Heading (degrees, 0-360)
-    float    accuracy;            ///< GPS horizontal accuracy (m)
-    float    altitude_accuracy;   ///< GPS vertical accuracy (m)
-    bool     gps_valid;           ///< true if GPS had a fix at time of reading
-};
-
-#endif // READING_H
+#include "buffer.h"
