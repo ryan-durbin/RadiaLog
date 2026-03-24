@@ -1,46 +1,55 @@
 #include "buffer.h"
 
 // =============================================================================
-// RadiaLog Firmware - ReadingBuffer Stub Implementation
-// Real implementation uses LittleFS for persistent reading storage.
-// This stub compiles and returns safe defaults.
+// RadiaLog Firmware - ReadingBuffer Implementation
+// LittleFS-backed persistent reading storage.
+// US-002: Skeleton with BufferStats and getStats(); other methods are stubs.
 // =============================================================================
 
 ReadingBuffer::ReadingBuffer()
-    : _count(0)
-    , _unsentCount(0)
+    : _depth(0)
+    , _lifetimeLogged(0)
+    , _lifetimeUploaded(0)
 {
 }
 
-void ReadingBuffer::begin() {
-    // Stub: no LittleFS initialization
-    // Real implementation: mount LittleFS, read index file
-    _count = 0;
-    _unsentCount = 0;
+bool ReadingBuffer::begin() {
+    // Initialize counters.
+    // Full implementation: mount LittleFS, load index file, restore counters.
+    _depth = 0;
+    _lifetimeLogged = 0;
+    _lifetimeUploaded = 0;
+    return true;
 }
 
-bool ReadingBuffer::append(const Reading& r) {
-    // Stub: do nothing, return false (not stored)
+BufferStats ReadingBuffer::getStats() const {
+    BufferStats stats;
+    stats.depth            = _depth;
+    stats.lifetimeLogged   = _lifetimeLogged;
+    stats.lifetimeUploaded = _lifetimeUploaded;
+    return stats;
+}
+
+bool ReadingBuffer::appendReading(const Reading& r) {
+    // Stub: LittleFS write not yet implemented.
     (void)r;
     return false;
 }
 
-uint32_t ReadingBuffer::count() const {
-    return _count;
+uint32_t ReadingBuffer::getUnuploaded(Reading* buf, uint32_t count) {
+    // Stub: no stored readings yet.
+    (void)buf;
+    (void)count;
+    return 0;
 }
 
-uint32_t ReadingBuffer::unsentCount() const {
-    return _unsentCount;
-}
-
-void ReadingBuffer::markSent(uint32_t count) {
-    // Stub: do nothing
+void ReadingBuffer::markUploaded(const uint32_t* ids, uint32_t count) {
+    // Stub: no stored readings yet.
+    (void)ids;
     (void)count;
 }
 
-uint32_t ReadingBuffer::getUnsent(Reading* buf, uint32_t max) {
-    // Stub: return 0 readings
-    (void)buf;
-    (void)max;
-    return 0;
+void ReadingBuffer::pruneUploaded() {
+    // Stub: no stored readings yet.
+    // Full implementation: scan storage and remove uploaded == true records.
 }

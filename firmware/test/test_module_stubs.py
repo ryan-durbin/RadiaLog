@@ -105,9 +105,10 @@ if check_file(buf_h, 'src/buffer.h') and check_file(buf_cpp, 'src/buffer.cpp'):
     h = read_file(buf_h)
     cpp = read_file(buf_cpp)
     check(contains(h, r'class\s+ReadingBuffer'), 'class ReadingBuffer declared', 'class ReadingBuffer NOT found')
-    for method in ['begin', 'append', 'count', 'unsentCount', 'markSent', 'getUnsent']:
+    # US-002: Updated API with getStats(), appendReading(), getUnuploaded(), markUploaded(), pruneUploaded()
+    for method in ['begin', 'getStats', 'appendReading', 'getUnuploaded', 'markUploaded', 'pruneUploaded']:
         check(contains(h, rf'\b{method}\s*\('), f'{method}() in header', f'{method}() NOT in header')
-    for method in ['begin', 'append', 'count', 'unsentCount', 'markSent', 'getUnsent']:
+    for method in ['begin', 'getStats', 'appendReading', 'getUnuploaded', 'markUploaded', 'pruneUploaded']:
         check(contains(cpp, rf'ReadingBuffer::{method}\b'), f'{method}() implemented in cpp',
               f'{method}() NOT implemented in cpp')
 
