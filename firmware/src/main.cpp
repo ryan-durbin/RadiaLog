@@ -123,6 +123,12 @@ void setup() {
         radiacode::Error err = radiaCode.connect();
         if (err == radiacode::Error::OK) {
             debugWS.log(MOD_USB, LVL_INFO, "[RadiaLog] RadiaCode USB connected.");
+            bool initOk = radiaCode.init();
+            if (initOk) {
+                debugWS.log(MOD_USB, LVL_INFO, "[RadiaLog] RadiaCode init sequence complete.");
+            } else {
+                debugWS.log(MOD_USB, LVL_WARN, "[RadiaLog] WARNING: RadiaCode init() failed.");
+            }
         } else {
             debugWS.log(MOD_USB, LVL_WARN, "[RadiaLog] WARNING: RadiaCode USB not found (err="
                 + String(static_cast<int>(err)) + "). Will retry in loop.");
