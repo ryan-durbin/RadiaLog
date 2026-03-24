@@ -60,8 +60,9 @@ class ReadingBuffer {
 public:
     ReadingBuffer();
 
-    /// Initialize storage. Sets counters to 0.
-    /// Full implementation will mount LittleFS and load index.
+    /// Initialize storage: mount LittleFS, create data file if absent,
+    /// load or initialize stats counters from index file.
+    /// Returns true on success.
     bool begin();
 
     /// Get current buffer statistics.
@@ -87,6 +88,9 @@ private:
     uint32_t _depth;             ///< Current number of stored readings
     uint32_t _lifetimeLogged;    ///< Total readings ever appended
     uint32_t _lifetimeUploaded;  ///< Total readings ever uploaded
+
+    /// Persist stats counters to /readings_idx.bin (write-through).
+    bool _saveIndex();
 };
 
 #endif // BUFFER_H

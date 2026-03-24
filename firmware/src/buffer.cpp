@@ -1,10 +1,18 @@
 #include "buffer.h"
+#include <LittleFS.h>
 
 // =============================================================================
 // RadiaLog Firmware - ReadingBuffer Implementation
 // LittleFS-backed persistent reading storage.
-// US-002: Skeleton with BufferStats and getStats(); other methods are stubs.
+// US-003: LittleFS init and index file for ReadingBuffer.
 // =============================================================================
+
+// File paths on LittleFS
+static const char* READINGS_FILE = "/readings.bin";
+static const char* INDEX_FILE    = "/readings_idx.bin";
+
+// Index file layout: uint32_t[3] = { depth, lifetimeLogged, lifetimeUploaded }
+static const size_t INDEX_SIZE = sizeof(uint32_t) * 3;
 
 ReadingBuffer::ReadingBuffer()
     : _depth(0)
@@ -14,12 +22,65 @@ ReadingBuffer::ReadingBuffer()
 }
 
 bool ReadingBuffer::begin() {
-    // Initialize counters.
-    // Full implementation: mount LittleFS, load index file, restore counters.
-    _depth = 0;
-    _lifetimeLogged = 0;
-    _lifetimeUploaded = 0;
-    return true;
+    // Mount LittleFS, format on first use if needed.
+    if (!LittleFS.begin(true)) {
+        return false;
+    }
+
+    // Create /readings.bin if it does not exist.
+    if (!LittleFS.exists(READINGS_FILE)) {
+        File f = LittleFS.open(READINGS_FILE, "w");
+        if (!f) {
+            return false;
+        }
+        f.close();
+    }
+
+    // Load or initialize stats from /readings_idx.bin.
+    if (!LittleFS.exists(INDEX_FILE)) {
+        // Index absent: initialize counters to zero.
+        _depth            = 0;
+        _lifetimeLogged   = 0;
+        _lifetimeUploaded = 0;
+    } else {
+        // Index present: try to read uint32_t[3].
+        File idx = LittleFS.open(INDEX_FILE, "r");
+        if (!idx) {
+            // Cannot open — fall back to zeros.
+            _depth            = 0;
+            _lifetimeLogged   = 0;
+            _lifetimeUploaded = 0;
+        } else {
+            uint32_t buf[3] = {0, 0, 0};
+            size_t bytesRead = idx.read(reinterpret_cast<uint8_t*>(buf), INDEX_SIZE);
+            idx.close();
+
+            if (bytesRead < INDEX_SIZE) {
+                // Corrupt / undersized — fall back to zeros.
+                _depth            = 0;
+                _lifetimeLogged   = 0;
+                _lifetimeUploaded = 0;
+            } else {
+                _depth            = buf[0];
+                _lifetimeLogged   = buf[1];
+                _lifetimeUploaded = buf[2];
+            }
+        }
+    }
+
+    // Write-through: persist the (possibly freshly initialized) index.
+    return _saveIndex();
+}
+
+bool ReadingBuffer::_saveIndex() {
+    File idx = LittleFS.open(INDEX_FILE, "w");
+    if (!idx) {
+        return false;
+    }
+    uint32_t buf[3] = { _depth, _lifetimeLogged, _lifetimeUploaded };
+    size_t written = idx.write(reinterpret_cast<const uint8_t*>(buf), INDEX_SIZE);
+    idx.close();
+    return written == INDEX_SIZE;
 }
 
 BufferStats ReadingBuffer::getStats() const {
