@@ -1,0 +1,31 @@
+# PlatformIO
+.pio/
+.pioenvs/
+.piolibdeps/
+
+# Build
+.build/
+build/
+
+# IDE
+.vscode/.browse.c_cpp.db*
+.vscode/c_cpp_properties.json
+.vscode/launch.json
+.vscode/ipch
+
+# Secrets / credentials
+.env
+.env.*
+*.key
+*.pem
+*.secret
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Node (if any tooling)
+node_modules/
