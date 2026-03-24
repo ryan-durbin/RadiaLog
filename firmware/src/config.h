@@ -64,6 +64,11 @@
 #define HAS_BUTTON      1
 #define BUTTON_PIN      14
 
+// Touch (CST816S capacitive touch controller)
+#define HAS_TOUCH       1
+#define TOUCH_INT_PIN   16
+#define TOUCH_RST_PIN   21
+
 #else
 #error "No board defined. Add -DBOARD_XIAO_ESP32S3 or -DBOARD_TDISPLAY_S3 to build_flags."
 #endif

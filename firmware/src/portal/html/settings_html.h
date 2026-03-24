@@ -38,6 +38,12 @@ input:focus{outline:none;border-color:#58a6ff}
 .toast{display:none;position:fixed;bottom:1rem;left:50%;transform:translateX(-50%);background:#238636;color:#fff;padding:0.5rem 1rem;border-radius:6px;font-size:0.875rem;z-index:200}
 .toast.error{background:#da3633}
 .actions-grid{display:flex;flex-wrap:wrap;gap:0.5rem;margin-top:0.5rem}
+.nav-status{display:flex;align-items:center;gap:0.5rem;flex-shrink:0}
+.dot{width:10px;height:10px;border-radius:50%;display:inline-block;flex-shrink:0}
+.dot-green{background:#3fb950}.dot-red{background:#f85149}.dot-gray{background:#484f58}
+.status-popup{display:none;position:fixed;top:56px;right:1rem;background:#161b22;border:1px solid #30363d;border-radius:8px;padding:0.75rem 1rem;z-index:200;min-width:200px;box-shadow:0 4px 12px rgba(0,0,0,0.4);font-size:0.8rem}
+.status-popup .sr{display:flex;justify-content:space-between;align-items:center;padding:0.25rem 0}
+.status-popup .sl{color:#8b949e}.st-ok{color:#3fb950}.st-err{color:#f85149}.st-warn{color:#d29922}
 </style>
 </head>
 <body>
@@ -49,7 +55,13 @@ input:focus{outline:none;border-color:#58a6ff}
     <a href="/settings" class="active">Settings</a>
     <a href="/data">Data</a>
   </div>
+  <div class="nav-status" style="cursor:pointer">
+    <span class="dot dot-gray" id="nav-wifi" title="WiFi"></span>
+    <span class="dot dot-gray" id="nav-gps" title="GPS"></span>
+    <span class="dot dot-gray" id="nav-usb" title="USB"></span>
+  </div>
 </nav>
+<div class="status-popup" id="status-popup"></div>
 <main>
 
 <p class="section-title">WiFi Networks</p>
@@ -209,6 +221,36 @@ function uploadOTA(){
 }
 
 loadSettings();
+
+// Status popup — hover + tap
+var popup=document.getElementById('status-popup'),ptimer=null,htimer=null;
+var ns=document.querySelector('.nav-status');
+function fetchPopup(){
+  popup.innerHTML='<div style="color:#8b949e">Loading...</div>';
+  popup.style.display='block';
+  clearTimeout(ptimer);
+  ptimer=setTimeout(function(){popup.style.display='none';},5000);
+  fetch('/api/status').then(function(r){return r.json();}).then(function(d){
+    var h='';
+    h+='<div class="sr"><span class="sl">WiFi</span><span class="'+(d.wifi_connected?'st-ok':'st-err')+'" style="font-weight:600">'+(d.wifi_connected?(d.wifi_ssid||'Connected'):'Disconnected')+'</span></div>';
+    if(d.wifi_sta_ip&&d.wifi_connected)h+='<div class="sr"><span class="sl">IP</span><span style="color:#58a6ff">'+d.wifi_sta_ip+'</span></div>';
+    h+='<div class="sr"><span class="sl">GPS</span><span class="'+(d.gps_fix?'st-ok':'st-warn')+'" style="font-weight:600">'+(d.gps_fix?d.gps_sats+' sats':'No Fix')+'</span></div>';
+    h+='<div class="sr"><span class="sl">USB</span><span class="'+(d.usb_connected?'st-ok':'st-err')+'" style="font-weight:600">'+(d.usb_connected?'Connected':'Disconnected')+'</span></div>';
+    h+='<div class="sr"><span class="sl">Buffer</span><span style="color:#c9d1d9;font-weight:600">'+d.buffer_pending+' pending</span></div>';
+    h+='<div class="sr"><span class="sl">Upload</span><span style="color:#c9d1d9">'+(d.last_upload||'Never')+'</span></div>';
+    document.getElementById('nav-wifi').className='dot '+(d.wifi_connected?'dot-green':'dot-red');
+    document.getElementById('nav-gps').className='dot '+(d.gps_fix?'dot-green':'dot-red');
+    document.getElementById('nav-usb').className='dot '+(d.usb_connected?'dot-green':'dot-red');
+    popup.innerHTML=h;
+  }).catch(function(){popup.innerHTML='<div class="st-err">Failed to load</div>';});
+}
+function hidePopup(){popup.style.display='none';clearTimeout(ptimer);}
+ns.addEventListener('click',function(e){e.stopPropagation();if(popup.style.display==='block'){hidePopup();return;}fetchPopup();});
+ns.addEventListener('mouseenter',function(){clearTimeout(htimer);fetchPopup();});
+ns.addEventListener('mouseleave',function(){htimer=setTimeout(hidePopup,400);});
+popup.addEventListener('mouseenter',function(){clearTimeout(htimer);clearTimeout(ptimer);});
+popup.addEventListener('mouseleave',function(){hidePopup();});
+document.addEventListener('click',function(){hidePopup();});
 </script>
 </body>
 </html>)rawhtml";

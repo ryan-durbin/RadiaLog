@@ -9,7 +9,15 @@
       "Bash(pio run:*)",
       "Read(//home/ryandurbin/.platformio/penv/**)",
       "Read(//home/ryandurbin/.local/bin/**)",
-      "Bash(find / -name pio -type f)"
+      "Bash(find / -name pio -type f)",
+      "Bash(find /home/ryandurbin/projects/RadiaLog/firmware/.pio -name *T-Display*S3* -o -name *TDISPLAY* -o -name *LilyGo*)",
+      "WebFetch(domain:deepwiki.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:esp32.com)",
+      "WebFetch(domain:www.community.lilygo.cc)",
+      "WebFetch(domain:www.raisingawesome.site)",
+      "WebFetch(domain:docs.espressif.com)",
+      "WebFetch(domain:protosupplies.com)"
     ]
   }
 }

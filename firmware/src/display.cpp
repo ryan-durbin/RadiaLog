@@ -20,6 +20,14 @@ static const uint16_t COL_RED     = 0xF800;  // Red
 static const uint16_t COL_YELLOW  = 0xFDA0;  // Yellow
 static const uint16_t COL_LINE    = 0x2104;  // Separator line
 
+#ifdef HAS_TOUCH
+volatile bool Display::_touchFlag = false;
+
+void IRAM_ATTR Display::_touchISR() {
+    _touchFlag = true;
+}
+#endif
+
 Display::Display()
     : _tft(TFT_eSPI())
     , _on(false)
@@ -34,6 +42,9 @@ void Display::begin() {
     pinMode(TFT_POWER_PIN, OUTPUT);
     digitalWrite(TFT_POWER_PIN, HIGH);
 
+    // Backlight pin
+    pinMode(TFT_BL_PIN, OUTPUT);
+
     // Button with internal pullup
     pinMode(BUTTON_PIN, INPUT_PULLUP);
 
@@ -41,31 +52,66 @@ void Display::begin() {
     _tft.setRotation(0);  // Portrait: 170 wide x 320 tall
     _tft.fillScreen(COL_BG);
 
-    // Start with display off (backlight off)
-    _sleep();
+    // Initialize touch controller
+#ifdef HAS_TOUCH
+    // Reset the CST816S
+    pinMode(TOUCH_RST_PIN, OUTPUT);
+    digitalWrite(TOUCH_RST_PIN, LOW);
+    delay(10);
+    digitalWrite(TOUCH_RST_PIN, HIGH);
+    delay(50);
+
+    // Touch interrupt — fires on any touch (falling edge)
+    pinMode(TOUCH_INT_PIN, INPUT_PULLUP);
+    attachInterrupt(digitalPinToInterrupt(TOUCH_INT_PIN), _touchISR, FALLING);
+#endif
+
+    // Show boot message and start with display on
+    _tft.setTextColor(COL_TITLE, COL_BG);
+    _tft.setTextDatum(MC_DATUM);
+    _tft.setTextSize(2);
+    _tft.drawString("RadiaLog", 85, 140);
+    _tft.setTextSize(1);
+    _tft.setTextColor(COL_DIM, COL_BG);
+    _tft.drawString("v" FW_VERSION, 85, 165);
+    _tft.drawString("Starting...", 85, 185);
+    _tft.setTextDatum(TL_DATUM);
+
+    _wake();
 }
 
 void Display::handleButton() {
-    bool reading = digitalRead(BUTTON_PIN);
     unsigned long now = millis();
+    bool wakeTriggered = false;
 
-    // Debounce
+    // Check physical button (GPIO14)
+    bool reading = digitalRead(BUTTON_PIN);
     if (reading != _lastBtnState) {
         _lastDebounce = now;
     }
-
     if ((now - _lastDebounce) > DEBOUNCE_MS) {
-        // Falling edge: button pressed (active LOW with pullup)
         if (reading == LOW && _lastBtnState == HIGH) {
-            if (_on) {
-                _sleep();
-            } else {
-                _wake();
-            }
+            wakeTriggered = true;
         }
     }
-
     _lastBtnState = reading;
+
+    // Check touch interrupt
+#ifdef HAS_TOUCH
+    if (_touchFlag) {
+        _touchFlag = false;
+        wakeTriggered = true;
+    }
+#endif
+
+    // Toggle display on wake trigger
+    if (wakeTriggered) {
+        if (_on) {
+            _sleep();
+        } else {
+            _wake();
+        }
+    }
 
     // Auto-off timeout
     if (_on && (now - _wakeTime) > DISPLAY_TIMEOUT_MS) {
@@ -76,12 +122,12 @@ void Display::handleButton() {
 void Display::_wake() {
     _on = true;
     _wakeTime = millis();
-    analogWrite(TFT_BL_PIN, 128);  // ~50% brightness
+    digitalWrite(TFT_BL_PIN, HIGH);
 }
 
 void Display::_sleep() {
     _on = false;
-    analogWrite(TFT_BL_PIN, 0);
+    digitalWrite(TFT_BL_PIN, LOW);
 }
 
 // =============================================================================
@@ -119,8 +165,12 @@ void Display::draw(const DisplayStatus& s) {
     _tft.fillCircle(155, y + 4, 5, s.wifiConnected ? COL_GREEN : COL_RED);
     if (s.wifiConnected && s.wifiSSID.length() > 0) {
         _tft.setTextColor(COL_DIM, COL_BG);
-        String ssid = s.wifiSSID.substring(0, 14);
-        _tft.drawString(ssid, 40, y);
+        _tft.drawString(s.wifiSSID.substring(0, 14), 40, y);
+    }
+    y += 12;
+    if (s.wifiConnected && s.staIP.length() > 0) {
+        _tft.setTextColor(COL_DIM, COL_BG);
+        _tft.drawString(s.staIP, 10, y);
     }
     y += 18;
 

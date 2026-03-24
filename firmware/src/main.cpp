@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <time.h>
+#include <ESPmDNS.h>
 #include "config.h"
 #include "config_mgr.h"
 #include "buffer.h"
@@ -93,10 +94,14 @@ void setup() {
     }
     debugWS.log(MOD_WIFI, LVL_INFO, "[RadiaLog] WiFi initialized. AP: " + wifi.getAPIP().toString());
 
-    // 6. NTP sync on WiFi connect
+    // 6. NTP sync + mDNS on WiFi connect
     wifi.registerOnConnect([]() {
         configTime(0, 0, NTP_SERVER_1, NTP_SERVER_2);
-        debugWS.log(MOD_WIFI, LVL_INFO, "[RadiaLog] NTP sync triggered.");
+        if (MDNS.begin("radialog")) {
+            MDNS.addService("http", "tcp", 80);
+            debugWS.log(MOD_WIFI, LVL_INFO, "[RadiaLog] mDNS started: http://radialog.local");
+        }
+        debugWS.log(MOD_WIFI, LVL_INFO, "[RadiaLog] STA IP: " + WiFi.localIP().toString());
     });
 
     // 7. Status portal
@@ -247,6 +252,7 @@ void loop() {
         ds.usbConnected   = radiaCode.isConnected();
         ds.wifiConnected  = wifi.isSTAConnected();
         ds.wifiSSID       = wifi.getSSID();
+        ds.staIP          = wifi.getSTAIP().toString();
         ds.lastUpload     = lastUpStr;
         ds.totalReadings  = stats.depth;
         ds.pendingReadings = stats.pending;

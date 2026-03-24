@@ -20,6 +20,7 @@ struct DisplayStatus {
     bool     usbConnected;
     bool     wifiConnected;
     String   wifiSSID;
+    String   staIP;
     String   lastUpload;
     uint32_t totalReadings;
     uint32_t pendingReadings;
@@ -59,6 +60,11 @@ private:
 
     void _wake();
     void _sleep();
+
+#ifdef HAS_TOUCH
+    static void IRAM_ATTR _touchISR();
+    static volatile bool _touchFlag;
+#endif
 };
 
 #endif // DISPLAY_H

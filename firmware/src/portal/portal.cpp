@@ -266,6 +266,7 @@ void StatusPortal::_handleApiStatus(AsyncWebServerRequest* request) {
     doc["wifi_connected"] = _wifi->isSTAConnected();
     doc["wifi_rssi"]      = _wifi->getSignalStrength();
     doc["wifi_ssid"]      = _wifi->getSSID();
+    doc["wifi_sta_ip"]    = _wifi->getSTAIP().toString();
 
     // USB
     doc["usb_connected"] = _rc->isConnected();
