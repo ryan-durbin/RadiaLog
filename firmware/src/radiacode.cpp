@@ -193,6 +193,33 @@ Error RadiaCode::execute(const std::vector<uint8_t>& request,
     return Error::OK;
 }
 
+Error RadiaCode::sendCommand(COMMAND command_id,
+                              const std::vector<uint8_t>& args,
+                              std::vector<uint8_t>& response) {
+    std::vector<uint8_t> request = buildRequest(
+        static_cast<uint16_t>(command_id), args);
+    return execute(request, response);
+}
+
+std::vector<uint8_t> RadiaCode::read_request(VS vs_id) {
+    // RD_VIRT_STRING args: 2-byte LE virtual store ID
+    uint16_t id = static_cast<uint16_t>(vs_id);
+    std::vector<uint8_t> args = {
+        static_cast<uint8_t>(id & 0xFF),
+        static_cast<uint8_t>((id >> 8) & 0xFF),
+    };
+    return buildRequest(static_cast<uint16_t>(COMMAND::RD_VIRT_STRING), args);
+}
+
+std::vector<uint8_t> RadiaCode::write_request(uint16_t vsfr_id, uint32_t value) {
+    // WR_VIRT_SFR args: 2-byte LE VSFR id + 4-byte LE uint32 value
+    std::vector<uint8_t> args(6);
+    args[0] = static_cast<uint8_t>(vsfr_id & 0xFF);
+    args[1] = static_cast<uint8_t>((vsfr_id >> 8) & 0xFF);
+    packLE32(&args[2], value);
+    return buildRequest(static_cast<uint16_t>(COMMAND::WR_VIRT_SFR), args);
+}
+
 // ============================================================================
 // Private: USB I/O
 // ============================================================================

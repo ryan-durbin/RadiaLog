@@ -28,6 +28,28 @@ typedef void* usb_transfer_t;
 
 namespace radiacode {
 
+// ---- Protocol command IDs ----------------------------------------------
+
+enum class COMMAND : uint16_t {
+    SET_EXCHANGE    = 0x0007,
+    SET_TIME        = 0x0A04,
+    GET_VERSION     = 0x000A,
+    GET_SERIAL      = 0x000B,
+    RD_VIRT_SFR     = 0x0824,
+    WR_VIRT_SFR     = 0x0825,
+    RD_VIRT_STRING  = 0x0826,
+    WR_VIRT_STRING  = 0x0827,
+};
+
+// ---- Virtual store (VS) identifiers ------------------------------------
+
+enum class VS : uint16_t {
+    CONFIGURATION  = 0x0002,
+    SERIAL_NUMBER  = 0x0008,
+    DATA_BUF       = 0x0100,
+    SPECTRUM       = 0x0200,
+};
+
 // ---- Error codes -------------------------------------------------------
 
 enum class Error {
@@ -83,6 +105,20 @@ public:
     // Increments the internal sequence counter.
     std::vector<uint8_t> buildRequest(uint16_t command_id,
                                       const std::vector<uint8_t>& args = {});
+
+    // Convenience: build + execute a command in one call.
+    // Returns Error::OK and fills `response` on success.
+    Error sendCommand(COMMAND command_id,
+                      const std::vector<uint8_t>& args,
+                      std::vector<uint8_t>& response);
+
+    // Build a RD_VIRT_STRING request payload for reading virtual store `vs_id`.
+    // Does NOT call execute(); returns the raw framed request bytes.
+    std::vector<uint8_t> read_request(VS vs_id);
+
+    // Build a WR_VIRT_SFR request payload for writing VSFR register `vsfr_id`
+    // with `value` (4-byte LE uint32). Does NOT call execute().
+    std::vector<uint8_t> write_request(uint16_t vsfr_id, uint32_t value);
 
     // Current sequence number (0-31)
     uint8_t getSeq() const { return _seq; }
