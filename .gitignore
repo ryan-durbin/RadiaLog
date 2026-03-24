@@ -29,3 +29,12 @@ Thumbs.db
 
 # Node (if any tooling)
 node_modules/
+
+# Antfarm progress files
+progress.txt
+progress-*.txt
+*.progress
+.antfarm/
+
+# Common
+dist/
