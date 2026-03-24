@@ -40,4 +40,37 @@ struct Reading {
     bool     uploaded;          ///< true if uploaded to server
 };
 
+// =============================================================================
+// ReadingBuffer - LittleFS-backed reading storage
+// =============================================================================
+
+class ReadingBuffer {
+public:
+    ReadingBuffer();
+
+    /// Initialize storage (mount LittleFS, load index).
+    void begin();
+
+    /// Append a reading to persistent storage.
+    /// Returns true on success, false if storage full or error.
+    bool append(const Reading& r);
+
+    /// Total number of stored readings.
+    uint32_t count() const;
+
+    /// Number of readings not yet uploaded.
+    uint32_t unsentCount() const;
+
+    /// Mark `count` unsent readings as sent (from oldest).
+    void markSent(uint32_t count);
+
+    /// Fill `buf` with up to `max` unsent readings.
+    /// Returns the number of readings written.
+    uint32_t getUnsent(Reading* buf, uint32_t max);
+
+private:
+    uint32_t _count;
+    uint32_t _unsentCount;
+};
+
 #endif // BUFFER_H
