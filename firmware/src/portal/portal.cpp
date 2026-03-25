@@ -303,13 +303,19 @@ void StatusPortal::_registerRoutes() {
 
                 NimBLEScanResults results = scan->start(5, false);
 
+                // RadiaCode BLE service UUID — match devices even if name is missing
+                static const NimBLEUUID RC_SVC("e63215e5-7003-49d8-96b0-b024798fb901");
+
                 _bleScanResults.clear();
                 for (int i = 0; i < results.getCount(); i++) {
                     NimBLEAdvertisedDevice dev = results.getDevice(i);
                     String name = dev.getName().c_str();
-                    if (name.startsWith("RC-")) {
+                    bool match = name.startsWith("RC-")
+                              || dev.isAdvertisingService(RC_SVC);
+                    if (match) {
                         BleScanEntry entry;
-                        entry.name = name;
+                        entry.name = name.length() > 0 ? name
+                                   : ("RC-" + String(dev.getAddress().toString().c_str()));
                         entry.mac  = dev.getAddress().toString().c_str();
                         entry.rssi = dev.getRSSI();
                         _bleScanResults.push_back(entry);
