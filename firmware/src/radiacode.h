@@ -171,6 +171,7 @@ private:
     void* _dev_hdl;     // usb_device_handle_t
     void* _out_xfer;    // usb_transfer_t* (OUT bulk transfer)
     void* _in_xfer;     // usb_transfer_t* (IN bulk transfer)
+    void* _xfer_semaphore;  // SemaphoreHandle_t
 
     // Write raw bytes to USB write endpoint (0x01).
     Error usbWrite(const uint8_t* data, size_t len);

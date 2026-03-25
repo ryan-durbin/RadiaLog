@@ -63,6 +63,7 @@ RadiaCode::RadiaCode()
     , _dev_hdl(nullptr)
     , _out_xfer(nullptr)
     , _in_xfer(nullptr)
+    , _xfer_semaphore(nullptr)
 {}
 
 RadiaCode::~RadiaCode() {
@@ -403,6 +404,13 @@ std::vector<uint8_t> RadiaCode::write_request(uint16_t vsfr_id, uint32_t value) 
 // Private: USB I/O
 // ============================================================================
 
+#ifdef ARDUINO
+// USB transfer completion callback — signals the binary semaphore from ISR context.
+static void usbTransferCallback(usb_transfer_t* xfer) {
+    xSemaphoreGiveFromISR((SemaphoreHandle_t)xfer->context, nullptr);
+}
+#endif
+
 Error RadiaCode::usbWrite(const uint8_t* data, size_t len) {
 #ifdef ARDUINO
     // ESP-IDF USB Host bulk transfer (synchronous via semaphore or direct API)
@@ -425,10 +433,8 @@ Error RadiaCode::usbWrite(const uint8_t* data, size_t len) {
         return Error::WRITE_FAILED;
     }
 
-    // Wait for completion signal (set in transfer callback)
-    // In a real implementation, a semaphore/event group would be used here.
-    // For Phase 1 transport, we use a blocking delay approach.
-    vTaskDelay(pdMS_TO_TICKS(USB_TIMEOUT_MS));
+    // Wait for transfer completion (semaphore is given in usbTransferCallback)
+    xSemaphoreTake((SemaphoreHandle_t)_xfer_semaphore, pdMS_TO_TICKS(USB_TIMEOUT_MS));
 
     return Error::OK;
 #else
@@ -453,8 +459,8 @@ int RadiaCode::usbRead(uint8_t* buf, size_t max_len, uint32_t timeout_ms) {
         return -1;
     }
 
-    // Wait for completion
-    vTaskDelay(pdMS_TO_TICKS(timeout_ms));
+    // Wait for transfer completion (semaphore is given in usbTransferCallback)
+    xSemaphoreTake((SemaphoreHandle_t)_xfer_semaphore, pdMS_TO_TICKS(timeout_ms));
 
     int received = xfer->actual_num_bytes;
     if (received <= 0) {
@@ -513,6 +519,10 @@ Error RadiaCode::initUsbHost() {
         usb_host_uninstall();
         return Error::CONNECT_FAILED;
     }
+
+    // Create binary semaphore for USB transfer synchronization
+    _xfer_semaphore = xSemaphoreCreateBinary();
+
     return Error::OK;
 #else
     // Unit-test stub
@@ -588,8 +598,8 @@ Error RadiaCode::claimInterface() {
     usb_transfer_t* out_xfer = reinterpret_cast<usb_transfer_t*>(_out_xfer);
     out_xfer->device_handle = reinterpret_cast<usb_device_handle_t>(_dev_hdl);
     out_xfer->bEndpointAddress = RadiaCode::EP_OUT;  // 0x01
-    out_xfer->callback = nullptr;
-    out_xfer->context = nullptr;
+    out_xfer->callback = usbTransferCallback;
+    out_xfer->context = _xfer_semaphore;
     out_xfer->timeout_ms = USB_TIMEOUT_MS;
 
     // Allocate bulk IN transfer (endpoint 0x81)
@@ -603,8 +613,8 @@ Error RadiaCode::claimInterface() {
     usb_transfer_t* in_xfer = reinterpret_cast<usb_transfer_t*>(_in_xfer);
     in_xfer->device_handle = reinterpret_cast<usb_device_handle_t>(_dev_hdl);
     in_xfer->bEndpointAddress = RadiaCode::EP_IN;  // 0x81
-    in_xfer->callback = nullptr;
-    in_xfer->context = nullptr;
+    in_xfer->callback = usbTransferCallback;
+    in_xfer->context = _xfer_semaphore;
     in_xfer->timeout_ms = USB_TIMEOUT_MS;
 
     return Error::OK;
@@ -628,6 +638,10 @@ void RadiaCode::releaseUsbHost() {
             reinterpret_cast<usb_host_client_handle_t>(_client_hdl),
             reinterpret_cast<usb_device_handle_t>(_dev_hdl));
         _dev_hdl = nullptr;
+    }
+    if (_xfer_semaphore) {
+        vSemaphoreDelete((SemaphoreHandle_t)_xfer_semaphore);
+        _xfer_semaphore = nullptr;
     }
     if (_client_hdl) {
         usb_host_client_deregister(
