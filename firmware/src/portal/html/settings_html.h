@@ -84,6 +84,13 @@ input:focus{outline:none;border-color:#58a6ff}
   <input type="text" id="cfg-device-id">
 </div>
 
+<p class="section-title">Geolocation</p>
+<div class="card">
+  <label>Google Geolocation API Key</label>
+  <input type="password" id="cfg-google-key">
+  <span style="font-size:0.75rem;color:#8b949e">Used for WiFi-based location when GPS has no fix. Leave empty to disable.</span>
+</div>
+
 <p class="section-title">Device</p>
 <div class="card">
   <label>Device Name</label>
@@ -168,6 +175,7 @@ function loadSettings(){
     document.getElementById('cfg-name').value=d.device_name||'';
     document.getElementById('cfg-interval').value=d.reading_interval_ms||2000;
     document.getElementById('cfg-ap-pass').value=d.ap_password||'';
+    document.getElementById('cfg-google-key').value=d.google_api_key||'';
   }).catch(function(){toast('Failed to load settings',true);});
 }
 
@@ -179,7 +187,8 @@ function saveSettings(){
     device_id:document.getElementById('cfg-device-id').value,
     device_name:document.getElementById('cfg-name').value,
     reading_interval_ms:parseInt(document.getElementById('cfg-interval').value)||2000,
-    ap_password:document.getElementById('cfg-ap-pass').value
+    ap_password:document.getElementById('cfg-ap-pass').value,
+    google_api_key:document.getElementById('cfg-google-key').value
   };
   fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
     .then(function(r){return r.json();})

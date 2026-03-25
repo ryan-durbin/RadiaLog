@@ -45,6 +45,10 @@ public:
     String  getApPassword() const;
     void    setApPassword(const String& pass);
 
+    // --- Geolocation ---
+    String  getGoogleApiKey() const;
+    void    setGoogleApiKey(const String& key);
+
     static constexpr int MAX_WIFI = 4;
 
 private:
@@ -57,6 +61,7 @@ private:
     String   _deviceName;
     uint32_t _readingIntervalMs;
     String   _apPassword;
+    String   _googleApiKey;
 };
 
 #endif // CONFIG_MGR_H

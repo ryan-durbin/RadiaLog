@@ -17,6 +17,7 @@ ConfigMgr::ConfigMgr()
     , _deviceName("RadiaLog")
     , _readingIntervalMs(2000)
     , _apPassword("")
+    , _googleApiKey("")
 {
 }
 
@@ -77,6 +78,13 @@ bool ConfigMgr::load() {
         if (ap["password"].is<const char*>()) _apPassword = ap["password"].as<String>();
     }
 
+    // Geolocation settings
+    if (doc["geolocation"].is<JsonObject>()) {
+        JsonObject geo = doc["geolocation"].as<JsonObject>();
+        if (geo["google_api_key"].is<const char*>())
+            _googleApiKey = geo["google_api_key"].as<String>();
+    }
+
     return true;
 }
 
@@ -105,6 +113,10 @@ bool ConfigMgr::save() {
     // AP settings
     JsonObject ap = doc["ap"].to<JsonObject>();
     ap["password"] = _apPassword;
+
+    // Geolocation settings
+    JsonObject geo = doc["geolocation"].to<JsonObject>();
+    geo["google_api_key"] = _googleApiKey;
 
     File f = LittleFS.open(CONFIG_FILE, "w");
     if (!f) {
@@ -203,4 +215,12 @@ void ConfigMgr::setReadingIntervalMs(uint32_t ms) {
 
 void ConfigMgr::setApPassword(const String& pass) {
     _apPassword = pass;
+}
+
+String ConfigMgr::getGoogleApiKey() const {
+    return _googleApiKey;
+}
+
+void ConfigMgr::setGoogleApiKey(const String& key) {
+    _googleApiKey = key;
 }

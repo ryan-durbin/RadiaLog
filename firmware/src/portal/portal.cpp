@@ -154,6 +154,8 @@ void StatusPortal::_registerRoutes() {
                     _cfg->setApPassword(body["ap_password"].as<String>());
                 if (body["reading_interval_ms"].is<uint32_t>())
                     _cfg->setReadingIntervalMs(body["reading_interval_ms"].as<uint32_t>());
+                if (body["google_api_key"].is<const char*>())
+                    _cfg->setGoogleApiKey(body["google_api_key"].as<String>());
 
                 bool ok = _cfg->save();
 
@@ -321,6 +323,7 @@ void StatusPortal::_handleApiSettings(AsyncWebServerRequest* request) {
     doc["device_name"]         = _cfg->getDeviceName();
     doc["reading_interval_ms"] = _cfg->getReadingIntervalMs();
     doc["ap_password"]         = _cfg->getApPassword();
+    doc["google_api_key"]      = _cfg->getGoogleApiKey();
 
     String out;
     serializeJson(doc, out);

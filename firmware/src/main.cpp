@@ -10,6 +10,7 @@
 #include "radiacode.h"
 #include "battery.h"
 #include "gps/atgm336h.h"
+#include "location_provider.h"
 #include "portal/portal.h"
 #include "portal/debug_ws.h"
 
@@ -32,6 +33,7 @@ static radiacode::RadiaCode radiaCode;
 static ATGM336H         gps(Serial1, GPS_TX_PIN, GPS_RX_PIN, GPS_BAUD);
 static StatusPortal     portal;
 static Battery          battery;
+static LocationProvider locationProvider;
 
 #ifdef HAS_DISPLAY
 static Display          display;
@@ -140,6 +142,10 @@ void setup() {
     debugWS.log(MOD_GPS, LVL_INFO, "[RadiaLog] GPS initialized. TX=" + String(GPS_TX_PIN)
         + " RX=" + String(GPS_RX_PIN));
 
+    // 10b. Location provider (clears cached position on boot)
+    locationProvider.begin(configMgr.getGoogleApiKey());
+    debugWS.log(MOD_GPS, LVL_INFO, "[RadiaLog] LocationProvider initialized (cache cleared).");
+
     // 11. Battery ADC
     battery.begin();
 
@@ -190,24 +196,24 @@ void loop() {
         }
     }
 
-    // --- 2. Poll GPS ---------------------------------------------------------
+    // --- 2. Poll GPS + resolve location --------------------------------------
     gps.poll();
-    bool gpsFix = gps.hasFix();
+    bool locationValid = locationProvider.update(gps, wifi.isSTAConnected());
 
-    // --- 3. Store reading ----------------------------------------------------
-    if (usbOk) {
+    // --- 3. Store reading (only with valid location) -------------------------
+    if (usbOk && locationValid) {
         Reading r = {};
         r.timestamp         = getCurrentTimestamp();
         r.dose_rate         = dose_rate;
         r.count_rate        = count_rate;
-        r.gps_valid         = gpsFix;
-        r.lat               = gpsFix ? static_cast<float>(gps.getLat()) : 0.0f;
-        r.lon               = gpsFix ? static_cast<float>(gps.getLon()) : 0.0f;
-        r.altitude          = gpsFix ? gps.getAlt()      : 0.0f;
-        r.speed_mph         = gpsFix ? (gps.getSpeed() * 0.621371f) : 0.0f;
-        r.speed_kph         = gpsFix ? gps.getSpeed()    : 0.0f;
-        r.heading           = gpsFix ? gps.getHeading()  : 0.0f;
-        r.accuracy          = gpsFix ? gps.getAccuracy() : 0.0f;
+        r.gps_valid         = true;
+        r.lat               = static_cast<float>(locationProvider.getLat());
+        r.lon               = static_cast<float>(locationProvider.getLon());
+        r.altitude          = locationProvider.getAlt();
+        r.speed_mph         = locationProvider.getSpeed() * 0.621371f;
+        r.speed_kph         = locationProvider.getSpeed();
+        r.heading           = locationProvider.getHeading();
+        r.accuracy          = locationProvider.getAccuracy();
         r.altitude_accuracy = 0.0f;
 
         readingBuffer.appendReading(r);
@@ -231,7 +237,7 @@ void loop() {
         led.setPattern(LedPattern::DOUBLE_FLASH);
     } else if (uploader.isUploading()) {
         led.setPattern(LedPattern::FAST_BLINK);
-    } else if (!gpsFix) {
+    } else if (!locationValid) {
         led.setPattern(LedPattern::SLOW_BLINK);
     } else {
         led.setPattern(LedPattern::SOLID);
@@ -266,7 +272,7 @@ void loop() {
         ds.countRate      = count_rate;
         ds.batteryVoltage = battery.getVoltage();
         ds.batteryPercent = battery.getPercent();
-        ds.gpsFix         = gpsFix;
+        ds.gpsFix         = locationValid;
         ds.gpsSats        = gps.getSatellites();
 
         display.draw(ds);
