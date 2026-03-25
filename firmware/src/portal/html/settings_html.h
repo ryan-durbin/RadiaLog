@@ -84,6 +84,16 @@ input:focus{outline:none;border-color:#58a6ff}
   <input type="text" id="cfg-device-id">
 </div>
 
+<p class="section-title">BLE RadiaCode Devices</p>
+<div id="ble-list"></div>
+<div class="card" id="ble-add">
+  <div class="row">
+    <div><label>MAC Address (e.g. AA:BB:CC:DD:EE:FF)</label><input type="text" id="new-ble-mac" placeholder="AA:BB:CC:DD:EE:FF"></div>
+    <div style="flex:0"><label>&nbsp;</label><button class="btn" onclick="addBle()">Add</button></div>
+  </div>
+  <span style="font-size:0.75rem;color:#8b949e">Add RadiaCode BLE MAC addresses to connect via Bluetooth instead of USB. Up to 4 devices.</span>
+</div>
+
 <p class="section-title">Geolocation</p>
 <div class="card">
   <label>Google Geolocation API Key</label>
@@ -132,6 +142,7 @@ input:focus{outline:none;border-color:#58a6ff}
 
 <script>
 var wifiNetworks = [];
+var bleDevices = [];
 
 function toast(msg, err){
   var t=document.getElementById('toast');
@@ -165,10 +176,38 @@ function removeWifi(i){
   renderWifi();
 }
 
+function renderBle(){
+  var el=document.getElementById('ble-list');
+  el.innerHTML='';
+  bleDevices.forEach(function(mac,i){
+    var d=document.createElement('div'); d.className='wifi-entry card';
+    d.innerHTML='<span>'+mac+'</span><button class="btn btn-sm btn-danger" onclick="removeBle('+i+')">Remove</button>';
+    el.appendChild(d);
+  });
+}
+
+function addBle(){
+  var mac=document.getElementById('new-ble-mac').value.trim().toUpperCase();
+  if(!mac){toast('MAC address required',true);return;}
+  if(!/^([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(mac)){toast('Invalid MAC format (AA:BB:CC:DD:EE:FF)',true);return;}
+  if(bleDevices.length>=4){toast('Max 4 BLE devices',true);return;}
+  if(bleDevices.indexOf(mac)>=0){toast('Device already added',true);return;}
+  bleDevices.push(mac);
+  document.getElementById('new-ble-mac').value='';
+  renderBle();
+}
+
+function removeBle(i){
+  bleDevices.splice(i,1);
+  renderBle();
+}
+
 function loadSettings(){
   fetch('/api/settings').then(function(r){return r.json();}).then(function(d){
     wifiNetworks=d.wifi||[];
     renderWifi();
+    bleDevices=d.ble_devices||[];
+    renderBle();
     document.getElementById('cfg-token').value=d.token||'';
     document.getElementById('cfg-url').value=d.upload_url||'';
     document.getElementById('cfg-device-id').value=d.device_id||'';
@@ -188,7 +227,8 @@ function saveSettings(){
     device_name:document.getElementById('cfg-name').value,
     reading_interval_ms:parseInt(document.getElementById('cfg-interval').value)||2000,
     ap_password:document.getElementById('cfg-ap-pass').value,
-    google_api_key:document.getElementById('cfg-google-key').value
+    google_api_key:document.getElementById('cfg-google-key').value,
+    ble_devices:bleDevices
   };
   fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
     .then(function(r){return r.json();})

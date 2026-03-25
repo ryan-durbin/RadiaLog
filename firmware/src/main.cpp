@@ -8,6 +8,7 @@
 #include "led.h"
 #include "uploader.h"
 #include "radiacode.h"
+#include "radiacode_mgr.h"
 #include "battery.h"
 #include "gps/atgm336h.h"
 #include "location_provider.h"
@@ -30,6 +31,7 @@ static WifiMgr          wifi;
 static Led              led;
 static Uploader         uploader;
 static radiacode::RadiaCode radiaCode;
+static radiacode::RadiaCodeMgr radiaCodeMgr;
 static ATGM336H         gps(Serial1, GPS_TX_PIN, GPS_RX_PIN, GPS_BAUD);
 static StatusPortal     portal;
 static Battery          battery;
@@ -137,6 +139,17 @@ void setup() {
         }
     }
 
+    // 9b. RadiaCode device manager (USB + BLE)
+    {
+        std::vector<String> bleMacs;
+        for (int i = 0; i < configMgr.getBleDeviceCount(); i++) {
+            bleMacs.push_back(configMgr.getBleDeviceMac(i));
+        }
+        radiaCodeMgr.begin(radiaCode, bleMacs);
+        debugWS.log(MOD_USB, LVL_INFO,
+            "[RadiaLog] Device manager ready. BLE devices: " + String(bleMacs.size()));
+    }
+
     // 10. GPS UART
     gps.begin();
     debugWS.log(MOD_GPS, LVL_INFO, "[RadiaLog] GPS initialized. TX=" + String(GPS_TX_PIN)
@@ -151,7 +164,7 @@ void setup() {
 
     // 12. LED
     led.begin();
-    if (!radiaCode.isConnected()) {
+    if (radiaCodeMgr.connectedCount() == 0) {
         led.setPattern(LedPattern::DOUBLE_FLASH);
     } else {
         led.setPattern(LedPattern::SLOW_BLINK);
@@ -173,26 +186,17 @@ void loop() {
     // --- 0. WiFi reconnect ---------------------------------------------------
     wifi.update();
 
-    // --- 1. Poll RadiaCode USB -----------------------------------------------
-    bool usbOk = false;
+    // --- 1. Poll all RadiaCode devices (USB + BLE) ----------------------------
+    auto deviceReadings = radiaCodeMgr.poll();
+    bool anyDeviceOk = !deviceReadings.empty();
+
+    // Track highest dose for display/LED (across all devices)
     float dose_rate  = 0.0f;
     float count_rate = 0.0f;
-
-    if (radiaCode.isConnected()) {
-        auto readings = radiaCode.readDataBuf();
-        if (!readings.empty()) {
-            auto& latest = readings.back();
-            dose_rate  = latest.dose_rate;
-            count_rate = latest.count_rate;
-            usbOk = true;
-        } else {
-            usbOk = radiaCode.isConnected();
-        }
-    } else {
-        radiacode::Error err = radiaCode.connect();
-        if (err == radiacode::Error::OK) {
-            debugWS.log(MOD_USB, LVL_INFO, "[RadiaLog] RadiaCode USB reconnected.");
-            usbOk = true;
+    for (const auto& dr : deviceReadings) {
+        if (dr.dose_rate > dose_rate) {
+            dose_rate  = dr.dose_rate;
+            count_rate = dr.count_rate;
         }
     }
 
@@ -200,23 +204,25 @@ void loop() {
     gps.poll();
     bool locationValid = locationProvider.update(gps, wifi.isSTAConnected());
 
-    // --- 3. Store reading (only with valid location) -------------------------
-    if (usbOk && locationValid) {
-        Reading r = {};
-        r.timestamp         = getCurrentTimestamp();
-        r.dose_rate         = dose_rate;
-        r.count_rate        = count_rate;
-        r.gps_valid         = true;
-        r.lat               = static_cast<float>(locationProvider.getLat());
-        r.lon               = static_cast<float>(locationProvider.getLon());
-        r.altitude          = locationProvider.getAlt();
-        r.speed_mph         = locationProvider.getSpeed() * 0.621371f;
-        r.speed_kph         = locationProvider.getSpeed();
-        r.heading           = locationProvider.getHeading();
-        r.accuracy          = locationProvider.getAccuracy();
-        r.altitude_accuracy = 0.0f;
+    // --- 3. Store readings (one per device, only with valid location) ---------
+    if (locationValid) {
+        for (const auto& dr : deviceReadings) {
+            Reading r = {};
+            r.timestamp         = getCurrentTimestamp();
+            r.dose_rate         = dr.dose_rate;
+            r.count_rate        = dr.count_rate;
+            r.gps_valid         = true;
+            r.lat               = static_cast<float>(locationProvider.getLat());
+            r.lon               = static_cast<float>(locationProvider.getLon());
+            r.altitude          = locationProvider.getAlt();
+            r.speed_mph         = locationProvider.getSpeed() * 0.621371f;
+            r.speed_kph         = locationProvider.getSpeed();
+            r.heading           = locationProvider.getHeading();
+            r.accuracy          = locationProvider.getAccuracy();
+            r.altitude_accuracy = 0.0f;
 
-        readingBuffer.appendReading(r);
+            readingBuffer.appendReading(r);
+        }
     }
 
     // --- 4. Battery ----------------------------------------------------------
@@ -233,7 +239,7 @@ void loop() {
     }
 
     // --- 6. LED pattern ------------------------------------------------------
-    if (!radiaCode.isConnected()) {
+    if (radiaCodeMgr.connectedCount() == 0) {
         led.setPattern(LedPattern::DOUBLE_FLASH);
     } else if (uploader.isUploading()) {
         led.setPattern(LedPattern::FAST_BLINK);
@@ -261,7 +267,7 @@ void loop() {
         }
 
         DisplayStatus ds;
-        ds.usbConnected   = radiaCode.isConnected();
+        ds.usbConnected   = radiaCodeMgr.connectedCount() > 0;
         ds.wifiConnected  = wifi.isSTAConnected();
         ds.wifiSSID       = wifi.getSSID();
         ds.staIP          = wifi.getSTAIP().toString();

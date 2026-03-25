@@ -156,6 +156,16 @@ void StatusPortal::_registerRoutes() {
                     _cfg->setReadingIntervalMs(body["reading_interval_ms"].as<uint32_t>());
                 if (body["google_api_key"].is<const char*>())
                     _cfg->setGoogleApiKey(body["google_api_key"].as<String>());
+                if (body["ble_devices"].is<JsonArray>()) {
+                    std::vector<String> macs;
+                    JsonArray bleArr = body["ble_devices"].as<JsonArray>();
+                    for (JsonVariant v : bleArr) {
+                        if (v.is<const char*>()) {
+                            macs.push_back(v.as<String>());
+                        }
+                    }
+                    _cfg->setBleDevices(macs);
+                }
 
                 bool ok = _cfg->save();
 
@@ -270,7 +280,7 @@ void StatusPortal::_handleApiStatus(AsyncWebServerRequest* request) {
     doc["wifi_ssid"]      = _wifi->getSSID();
     doc["wifi_sta_ip"]    = _wifi->getSTAIP().toString();
 
-    // USB
+    // USB / Devices
     doc["usb_connected"] = _rc->isConnected();
 
     // Buffer
@@ -324,6 +334,11 @@ void StatusPortal::_handleApiSettings(AsyncWebServerRequest* request) {
     doc["reading_interval_ms"] = _cfg->getReadingIntervalMs();
     doc["ap_password"]         = _cfg->getApPassword();
     doc["google_api_key"]      = _cfg->getGoogleApiKey();
+
+    JsonArray bleArr = doc["ble_devices"].to<JsonArray>();
+    for (int i = 0; i < _cfg->getBleDeviceCount(); i++) {
+        bleArr.add(_cfg->getBleDeviceMac(i));
+    }
 
     String out;
     serializeJson(doc, out);

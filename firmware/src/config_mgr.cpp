@@ -85,6 +85,18 @@ bool ConfigMgr::load() {
             _googleApiKey = geo["google_api_key"].as<String>();
     }
 
+    // BLE RadiaCode devices
+    _bleDeviceMacs.clear();
+    if (doc["ble_devices"].is<JsonArray>()) {
+        JsonArray bleArr = doc["ble_devices"].as<JsonArray>();
+        for (JsonVariant v : bleArr) {
+            if (_bleDeviceMacs.size() >= MAX_BLE_DEVICES) break;
+            if (v.is<const char*>()) {
+                _bleDeviceMacs.push_back(v.as<String>());
+            }
+        }
+    }
+
     return true;
 }
 
@@ -117,6 +129,12 @@ bool ConfigMgr::save() {
     // Geolocation settings
     JsonObject geo = doc["geolocation"].to<JsonObject>();
     geo["google_api_key"] = _googleApiKey;
+
+    // BLE RadiaCode devices
+    JsonArray bleArr = doc["ble_devices"].to<JsonArray>();
+    for (const auto& mac : _bleDeviceMacs) {
+        bleArr.add(mac);
+    }
 
     File f = LittleFS.open(CONFIG_FILE, "w");
     if (!f) {
@@ -223,4 +241,23 @@ String ConfigMgr::getGoogleApiKey() const {
 
 void ConfigMgr::setGoogleApiKey(const String& key) {
     _googleApiKey = key;
+}
+
+int ConfigMgr::getBleDeviceCount() const {
+    return static_cast<int>(_bleDeviceMacs.size());
+}
+
+String ConfigMgr::getBleDeviceMac(int i) const {
+    if (i < 0 || i >= static_cast<int>(_bleDeviceMacs.size())) return "";
+    return _bleDeviceMacs[i];
+}
+
+void ConfigMgr::setBleDevices(const std::vector<String>& macs) {
+    _bleDeviceMacs.clear();
+    for (const auto& mac : macs) {
+        if (_bleDeviceMacs.size() >= MAX_BLE_DEVICES) break;
+        if (mac.length() > 0) {
+            _bleDeviceMacs.push_back(mac);
+        }
+    }
 }

@@ -3,6 +3,7 @@
 #define CONFIG_MGR_H
 
 #include <Arduino.h>
+#include <vector>
 
 // =============================================================================
 // RadiaLog Firmware - Configuration Manager
@@ -49,7 +50,13 @@ public:
     String  getGoogleApiKey() const;
     void    setGoogleApiKey(const String& key);
 
+    // --- BLE RadiaCode devices ---
+    int     getBleDeviceCount() const;
+    String  getBleDeviceMac(int i) const;
+    void    setBleDevices(const std::vector<String>& macs);
+
     static constexpr int MAX_WIFI = 4;
+    static constexpr int MAX_BLE_DEVICES = 4;
 
 private:
     String   _wifiSSID[MAX_WIFI];
@@ -62,6 +69,7 @@ private:
     uint32_t _readingIntervalMs;
     String   _apPassword;
     String   _googleApiKey;
+    std::vector<String> _bleDeviceMacs;
 };
 
 #endif // CONFIG_MGR_H
