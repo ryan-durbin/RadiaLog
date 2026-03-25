@@ -17,7 +17,8 @@
 
 /// Snapshot of system state passed to the display for rendering.
 struct DisplayStatus {
-    bool     usbConnected;
+    bool     rcConnected;
+    bool     rcIsUsb;           ///< true = USB source, false = BLE source
     bool     wifiConnected;
     String   wifiSSID;
     String   staIP;
@@ -30,6 +31,7 @@ struct DisplayStatus {
     uint8_t  batteryPercent;
     bool     gpsFix;
     int      gpsSats;
+    uint32_t loopCount;         ///< Main loop iteration counter (debug)
 };
 
 class Display {

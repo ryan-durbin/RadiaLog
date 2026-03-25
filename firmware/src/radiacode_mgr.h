@@ -48,6 +48,10 @@ public:
     /// Number of configured BLE devices (connected or not).
     int bleConfiguredCount() const;
 
+    /// Update the BLE device list at runtime (e.g. after settings change).
+    /// Disconnects removed devices and connects new ones.
+    void updateBleDevices(const std::vector<String>& bleMacs);
+
 private:
     RadiaCode* _usb;
 
@@ -56,11 +60,16 @@ private:
         RadiaCodeBLE  device;
         bool          initialized;
         unsigned long lastReconnectAttemptMs;
+        volatile bool reconnecting;   ///< true while background task is running
     };
 
     std::vector<BLEEntry> _bleDevices;
 
     static constexpr unsigned long BLE_RECONNECT_INTERVAL_MS = 15000;
+
+    /// Launch a one-shot FreeRTOS task to reconnect a BLE device without
+    /// blocking the main loop.
+    void _startBleReconnectTask(BLEEntry& entry);
 };
 
 } // namespace radiacode

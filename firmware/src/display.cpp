@@ -156,10 +156,10 @@ void Display::_sleep() {
 // =============================================================================
 // Helper: pick dose rate color by severity
 // =============================================================================
-static uint16_t doseColor(float doseRate) {
-    if (doseRate >= 1.0f)  return 0xF800;  // Red:    >= 1 uSv/h
-    if (doseRate >= 0.3f)  return 0xFDA0;  // Yellow: >= 0.3
-    return 0x07E0;                          // Green:  normal
+static uint16_t doseColor(float doseRate_uSvh) {
+    if (doseRate_uSvh >= 1.0f)  return 0xF800;  // Red:    >= 1 uSv/h
+    if (doseRate_uSvh >= 0.3f)  return 0xFDA0;  // Yellow: >= 0.3
+    return 0x07E0;                                // Green:  normal
 }
 
 // =============================================================================
@@ -186,22 +186,20 @@ void Display::draw(const DisplayStatus& s) {
     int sx = 8;
     int sy = 8;
 
-    // RadiaCode indicator
-    fb.fillCircle(sx + 4, sy + 4, 4, s.usbConnected ? COL_GREEN : COL_RED);
+    // RadiaCode indicator — green=connected, red=disconnected
+    fb.fillCircle(sx + 4, sy + 4, 4, s.rcConnected ? COL_GREEN : COL_RED);
     fb.setTextColor(COL_LABEL, COL_BG);
     fb.setTextSize(1);
-    fb.drawString("RC", sx + 12, sy);
+    fb.drawString(s.rcConnected ? (s.rcIsUsb ? "USB" : "BLE") : "RC", sx + 12, sy);
 
     // WiFi indicator
     sx += 38;
     fb.fillCircle(sx + 4, sy + 4, 4, s.wifiConnected ? COL_GREEN : COL_RED);
-    fb.setTextColor(COL_LABEL, COL_BG);
     fb.drawString("Wi", sx + 12, sy);
 
     // GPS indicator
     sx += 34;
     fb.fillCircle(sx + 4, sy + 4, 4, s.gpsFix ? COL_GREEN : COL_YELLOW);
-    fb.setTextColor(COL_LABEL, COL_BG);
     if (s.gpsFix) {
         fb.drawString(String(s.gpsSats), sx + 12, sy);
     } else {
@@ -215,9 +213,8 @@ void Display::draw(const DisplayStatus& s) {
         char batBuf[8];
         snprintf(batBuf, sizeof(batBuf), "%d%%", s.batteryPercent);
         fb.setTextColor(batCol, COL_BG);
-        fb.setTextDatum(TR_DATUM);
-        fb.drawString(batBuf, 164, sy);
-        fb.setTextDatum(TL_DATUM);
+        int bw = fb.textWidth(batBuf);
+        fb.drawString(batBuf, 164 - bw, sy);
 
         // Tiny battery bar
         int barX = 130, barY = sy + 10, barW = 34, barH = 5;
@@ -231,24 +228,23 @@ void Display::draw(const DisplayStatus& s) {
     fb.drawFastHLine(8, 26, 154, COL_LINE);
 
     // =====================================================================
-    // DOSE RATE — hero section (y: 32–130)
+    // DOSE RATE — hero section
     // =====================================================================
-
-    // Label — centered manually
     fb.setTextColor(COL_LABEL, COL_BG);
     fb.setTextSize(2);
     int labelW = fb.textWidth("DOSE RATE");
     fb.drawString("DOSE RATE", (170 - labelW) / 2, 34);
 
-    // Big number — color-coded, size 4 (24x32 per char = fits 7 chars in 170px)
+    // Big number — color-coded, size 4, displayed in nSv/h
     uint16_t dCol = doseColor(s.doseRate);
+    float doseNsvh = s.doseRate * 1000.0f;
     char doseBuf[16];
-    if (s.doseRate < 10.0f) {
-        snprintf(doseBuf, sizeof(doseBuf), "%.3f", s.doseRate);
-    } else if (s.doseRate < 100.0f) {
-        snprintf(doseBuf, sizeof(doseBuf), "%.2f", s.doseRate);
+    if (doseNsvh < 100.0f) {
+        snprintf(doseBuf, sizeof(doseBuf), "%.1f", doseNsvh);
+    } else if (doseNsvh < 10000.0f) {
+        snprintf(doseBuf, sizeof(doseBuf), "%.0f", doseNsvh);
     } else {
-        snprintf(doseBuf, sizeof(doseBuf), "%.1f", s.doseRate);
+        snprintf(doseBuf, sizeof(doseBuf), "%.0f", doseNsvh);
     }
     fb.setTextColor(dCol, COL_BG);
     fb.setTextSize(4);
@@ -258,27 +254,26 @@ void Display::draw(const DisplayStatus& s) {
     // Unit
     fb.setTextColor(COL_DIM, COL_BG);
     fb.setTextSize(2);
-    int unitW = fb.textWidth("uSv/h");
-    fb.drawString("uSv/h", (170 - unitW) / 2, 98);
+    int unitW = fb.textWidth("nSv/h");
+    fb.drawString("nSv/h", (170 - unitW) / 2, 98);
 
     // =====================================================================
-    // COUNT RATE (y: 124–148)
+    // COUNT RATE
     // =====================================================================
     fb.setTextColor(COL_LABEL, COL_BG);
     fb.setTextSize(2);
     fb.drawString("CPS", 8, 128);
 
     char cpsBuf[16];
-    snprintf(cpsBuf, sizeof(cpsBuf), "%.1f", s.countRate);
+    snprintf(cpsBuf, sizeof(cpsBuf), "%.2f", s.countRate);
     fb.setTextColor(COL_VALUE, COL_BG);
-    fb.setTextDatum(TR_DATUM);
-    fb.drawString(cpsBuf, 164, 128);
-    fb.setTextDatum(TL_DATUM);
+    int cpsW = fb.textWidth(cpsBuf);
+    fb.drawString(cpsBuf, 164 - cpsW, 128);
 
     fb.drawFastHLine(8, 150, 154, COL_LINE);
 
     // =====================================================================
-    // INFO ROWS (y: 158–250) — size 2 for readability
+    // INFO ROWS — size 2 for readability
     // =====================================================================
     fb.setTextSize(2);
     int iy = 158;
@@ -288,47 +283,55 @@ void Display::draw(const DisplayStatus& s) {
     fb.setTextColor(COL_LABEL, COL_BG);
     fb.drawString("Stored", 8, iy);
     fb.setTextColor(COL_VALUE, COL_BG);
-    fb.setTextDatum(TR_DATUM);
-    fb.drawString(String(s.totalReadings), 164, iy);
-    fb.setTextDatum(TL_DATUM);
+    String storedStr = String(s.totalReadings);
+    fb.drawString(storedStr, 164 - fb.textWidth(storedStr), iy);
     iy += rowH;
 
     // Pending upload
     fb.setTextColor(COL_LABEL, COL_BG);
     fb.drawString("Pending", 8, iy);
     fb.setTextColor(s.pendingReadings > 0 ? COL_YELLOW : COL_GREEN, COL_BG);
-    fb.setTextDatum(TR_DATUM);
-    fb.drawString(String(s.pendingReadings), 164, iy);
-    fb.setTextDatum(TL_DATUM);
+    String pendStr = String(s.pendingReadings);
+    fb.drawString(pendStr, 164 - fb.textWidth(pendStr), iy);
     iy += rowH;
 
     // Last upload
     fb.setTextColor(COL_LABEL, COL_BG);
     fb.drawString("Upload", 8, iy);
     fb.setTextColor(COL_VALUE, COL_BG);
-    fb.setTextDatum(TR_DATUM);
-    fb.drawString(s.lastUpload, 164, iy);
-    fb.setTextDatum(TL_DATUM);
+    fb.drawString(s.lastUpload, 164 - fb.textWidth(s.lastUpload), iy);
     iy += rowH;
 
     fb.drawFastHLine(8, iy + 2, 154, COL_LINE);
 
     // =====================================================================
-    // WIFI INFO (bottom)
+    // WIFI + UPTIME (bottom, small)
     // =====================================================================
-    iy += 10;
+    iy += 6;
     fb.setTextSize(1);
+    fb.setTextColor(COL_DIM, COL_BG);
     if (s.wifiConnected && s.staIP.length() > 0) {
-        fb.setTextColor(COL_DIM, COL_BG);
         int ssidW = fb.textWidth(s.wifiSSID);
         fb.drawString(s.wifiSSID, (170 - ssidW) / 2, iy);
         int ipW = fb.textWidth(s.staIP);
         fb.drawString(s.staIP, (170 - ipW) / 2, iy + 12);
     } else {
-        fb.setTextColor(COL_DIM, COL_BG);
-        int nwW = fb.textWidth("WiFi not connected");
-        fb.drawString("WiFi not connected", (170 - nwW) / 2, iy);
+        int nwW = fb.textWidth("WiFi disconnected");
+        fb.drawString("WiFi disconnected", (170 - nwW) / 2, iy);
     }
+
+    // Uptime — bottom-right corner
+    unsigned long sec = millis() / 1000UL;
+    char uptBuf[16];
+    if (sec < 3600) {
+        snprintf(uptBuf, sizeof(uptBuf), "%lum%lus", sec / 60, sec % 60);
+    } else if (sec < 86400) {
+        snprintf(uptBuf, sizeof(uptBuf), "%luh%lum", sec / 3600, (sec % 3600) / 60);
+    } else {
+        snprintf(uptBuf, sizeof(uptBuf), "%lud%luh", sec / 86400, (sec % 86400) / 3600);
+    }
+    int upW = fb.textWidth(uptBuf);
+    fb.drawString(uptBuf, 164 - upW, 310);
 
     // Push the whole frame at once
     fb.pushSprite(0, 0);

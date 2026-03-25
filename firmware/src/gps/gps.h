@@ -40,6 +40,13 @@ public:
 
     /// Number of satellites in use
     virtual int getSatellites() const = 0;
+
+    /// Inject approximate time for A-GPS (UTC). No-op if unsupported.
+    virtual void injectTime(uint16_t year, uint8_t month, uint8_t day,
+                            uint8_t hour, uint8_t min, uint8_t sec) { (void)year; (void)month; (void)day; (void)hour; (void)min; (void)sec; }
+
+    /// Inject approximate position for A-GPS. No-op if unsupported.
+    virtual void injectPosition(double lat, double lon, float altM) { (void)lat; (void)lon; (void)altM; }
 };
 
 #endif // GPS_H

@@ -143,6 +143,7 @@ const char* DebugWS::_moduleStr(LogModule module) const {
         case MOD_WIFI:   return "WIFI";
         case MOD_UPLOAD: return "UPLOAD";
         case MOD_BUFFER: return "BUFFER";
+        case MOD_BLE:    return "BLE";
         default:         return "UNKNOWN";
     }
 }

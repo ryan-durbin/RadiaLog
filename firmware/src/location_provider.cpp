@@ -3,43 +3,59 @@
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
+#include <LittleFS.h>
 
 // =============================================================================
 // RadiaLog Firmware - LocationProvider Implementation
-// Fallback chain: GPS fix → cached position (≤2 min) → WiFi geolocation.
+// Fallback chain: GPS fix → in-memory cache (≤2 min) → stored position → WiFi geo.
+// Persists last known position to LittleFS for GPS aiding and boot-time use.
+// Only calls Google Geolocation API when WiFi environment changes.
 // =============================================================================
+
+static const char* STORED_POS_PATH = "/last_pos.json";
 
 LocationProvider::LocationProvider()
     : _lat(0.0), _lon(0.0)
     , _alt(0.0f), _speed(0.0f), _heading(0.0f), _accuracy(0.0f)
     , _source(Source::NONE)
-    , _cachedLat(0.0), _cachedLon(0.0)
-    , _cachedAlt(0.0f), _cachedSpeed(0.0f), _cachedHeading(0.0f), _cachedAccuracy(0.0f)
-    , _cachedAtMs(0)
-    , _cacheValid(false)
     , _lastWifiGeoAttemptMs(0)
+    , _storedValid(false)
+    , _storedLat(0.0), _storedLon(0.0)
+    , _storedAlt(0.0f), _storedAccuracy(0.0f)
+    , _aidingInjected(false)
 {
 }
 
 void LocationProvider::begin(const String& googleApiKey) {
     _googleApiKey = googleApiKey;
-
-    // Clear all cached state on boot
-    _cacheValid = false;
-    _cachedLat = 0.0;
-    _cachedLon = 0.0;
-    _cachedAlt = 0.0f;
-    _cachedSpeed = 0.0f;
-    _cachedHeading = 0.0f;
-    _cachedAccuracy = 0.0f;
-    _cachedAtMs = 0;
-
     _source = Source::NONE;
     _lastWifiGeoAttemptMs = 0;
+    _aidingInjected = false;
+
+    // Load last known position from LittleFS
+    if (_loadStoredPosition()) {
+        debugWS.log(MOD_GPS, LVL_INFO,
+            "[Location] Stored position loaded: " + String(_storedLat, 5)
+            + ", " + String(_storedLon, 5) + " (±" + String(_storedAccuracy, 0) + "m)");
+    } else {
+        debugWS.log(MOD_GPS, LVL_INFO, "[Location] No stored position found.");
+    }
 }
 
 bool LocationProvider::update(GPS& gps, bool wifiStaConnected) {
-    // --- Priority 1: Live GPS fix ---
+    // --- A-GPS aiding: inject time + position once after NTP sync ---
+    if (!_aidingInjected && _storedValid && time(nullptr) > 1000000000) {
+        struct tm t;
+        time_t now = time(nullptr);
+        gmtime_r(&now, &t);
+        gps.injectTime(t.tm_year + 1900, t.tm_mon + 1, t.tm_mday,
+                       t.tm_hour, t.tm_min, t.tm_sec);
+        gps.injectPosition(_storedLat, _storedLon, _storedAlt);
+        _aidingInjected = true;
+        debugWS.log(MOD_GPS, LVL_INFO, "[Location] A-GPS aiding injected.");
+    }
+
+    // --- Priority 1: Live GPS fix (the only truly trustworthy source) ---
     if (gps.hasFix()) {
         _lat      = gps.getLat();
         _lon      = gps.getLon();
@@ -49,68 +65,135 @@ bool LocationProvider::update(GPS& gps, bool wifiStaConnected) {
         _accuracy = gps.getAccuracy();
         _source   = Source::GPS;
 
-        _updateCache(_lat, _lon, _alt, _speed, _heading, _accuracy);
+        _saveStoredPosition(_lat, _lon, _alt, _accuracy);
         return true;
     }
 
-    // --- Priority 2: Cached position (within 2 minutes) ---
-    if (_cacheValid && (millis() - _cachedAtMs) < CACHE_EXPIRY_MS) {
-        _lat      = _cachedLat;
-        _lon      = _cachedLon;
-        _alt      = _cachedAlt;
-        _speed    = _cachedSpeed;
-        _heading  = _cachedHeading;
-        _accuracy = _cachedAccuracy;
-        _source   = Source::CACHED;
-        return true;
-    }
-
-    // Cache has expired
-    if (_cacheValid) {
-        _cacheValid = false;
-        debugWS.log(MOD_GPS, LVL_INFO, "[Location] Cache expired (>2 min stale).");
-    }
-
-    // --- Priority 3: WiFi geolocation ---
+    // --- Priority 2: WiFi geolocation (stationary/indoor fallback) ---
+    //     Only call API when WiFi environment changes (new location).
     if (wifiStaConnected && _googleApiKey.length() > 0) {
-        // Rate limit: only attempt every 30 seconds
         if ((millis() - _lastWifiGeoAttemptMs) >= WIFI_GEO_COOLDOWN_MS) {
-            if (_tryWifiGeolocation()) {
+            String fp = _computeWifiFingerprint();
+            if (fp.length() > 0 && fp != _lastWifiFingerprintHash) {
+                if (_tryWifiGeolocation()) {
+                    _source = Source::WIFI_GEO;
+                    _saveStoredPosition(_lat, _lon, _alt, _accuracy);
+                    _lastWifiFingerprintHash = fp;
+                    return true;
+                }
+                _lastWifiFingerprintHash = fp;
+            } else if (fp == _lastWifiFingerprintHash && _lastWifiFingerprintHash.length() > 0) {
+                // Same WiFi environment as last successful geo — reuse that position
+                _lastWifiGeoAttemptMs = millis();
                 _source = Source::WIFI_GEO;
-                _updateCache(_lat, _lon, _alt, _speed, _heading, _accuracy);
                 return true;
             }
+        } else if (_source == Source::WIFI_GEO && _lastWifiFingerprintHash.length() > 0) {
+            // Between cooldowns, keep returning the current WiFi geo position
+            return true;
         }
     }
 
-    // --- No valid location available ---
+    // --- No fresh position available ---
+    // Stored position is only used for A-GPS aiding, never for tagging readings.
     _source = Source::NONE;
     return false;
 }
 
-void LocationProvider::_updateCache(double lat, double lon, float alt,
-                                     float speed, float heading, float accuracy) {
-    _cachedLat      = lat;
-    _cachedLon      = lon;
-    _cachedAlt      = alt;
-    _cachedSpeed    = speed;
-    _cachedHeading  = heading;
-    _cachedAccuracy = accuracy;
-    _cachedAtMs     = millis();
-    _cacheValid     = true;
+// =============================================================================
+// Persistent position — saved to /last_pos.json on LittleFS
+// =============================================================================
+
+bool LocationProvider::_loadStoredPosition() {
+    File f = LittleFS.open(STORED_POS_PATH, "r");
+    if (!f) return false;
+
+    JsonDocument doc;
+    DeserializationError err = deserializeJson(doc, f);
+    f.close();
+    if (err) return false;
+
+    _storedLat      = doc["lat"].as<double>();
+    _storedLon      = doc["lon"].as<double>();
+    _storedAlt      = doc["alt"].as<float>();
+    _storedAccuracy = doc["acc"].as<float>();
+
+    // Sanity check
+    if (_storedLat == 0.0 && _storedLon == 0.0) return false;
+
+    _storedValid = true;
+    return true;
+}
+
+void LocationProvider::_saveStoredPosition(double lat, double lon, float alt, float accuracy) {
+    // Don't re-save if position hasn't moved significantly (>100m)
+    if (_storedValid) {
+        double dlat = lat - _storedLat;
+        double dlon = lon - _storedLon;
+        double distApprox = (dlat * dlat + dlon * dlon) * 111000.0 * 111000.0;
+        if (distApprox < 100.0 * 100.0) return;  // <100m, skip write
+    }
+
+    _storedLat      = lat;
+    _storedLon      = lon;
+    _storedAlt      = alt;
+    _storedAccuracy = accuracy;
+    _storedValid    = true;
+
+    JsonDocument doc;
+    doc["lat"] = lat;
+    doc["lon"] = lon;
+    doc["alt"] = alt;
+    doc["acc"] = accuracy;
+
+    File f = LittleFS.open(STORED_POS_PATH, "w");
+    if (f) {
+        serializeJson(doc, f);
+        f.close();
+    }
+}
+
+// =============================================================================
+// WiFi fingerprint — hash of top BSSIDs to detect location change
+// =============================================================================
+
+String LocationProvider::_computeWifiFingerprint() {
+    // Quick scan (non-blocking results from the system's cached scan)
+    int n = WiFi.scanComplete();
+    if (n == WIFI_SCAN_FAILED) {
+        // Kick off a scan for next time
+        WiFi.scanNetworks(true, false, false, 300);
+        return "";
+    }
+    if (n == WIFI_SCAN_RUNNING || n <= 0) {
+        return "";
+    }
+
+    // Sort top 3 BSSIDs by signal strength and hash them
+    // Simple approach: concatenate the top 3 MAC addresses
+    String fp;
+    int count = (n > 3) ? 3 : n;
+    for (int i = 0; i < count; i++) {
+        fp += WiFi.BSSIDstr(i);
+    }
+    WiFi.scanDelete();
+
+    // Kick off next scan for future comparisons
+    WiFi.scanNetworks(true, false, false, 300);
+
+    return fp;
 }
 
 // =============================================================================
 // WiFi Geolocation — Google Geolocation API
-// Scans nearby APs, posts MAC/RSSI to Google, returns lat/lon/accuracy.
 // =============================================================================
 
 bool LocationProvider::_tryWifiGeolocation() {
     _lastWifiGeoAttemptMs = millis();
 
-    debugWS.log(MOD_GPS, LVL_INFO, "[Location] Attempting WiFi geolocation...");
+    debugWS.log(MOD_GPS, LVL_INFO, "[Location] WiFi geolocation API call...");
 
-    // Scan for nearby access points (synchronous, blocks ~2-3s)
+    // Synchronous scan for AP data to send to Google
     int n = WiFi.scanNetworks(false, false, false, 300);
     if (n <= 0) {
         WiFi.scanDelete();
@@ -118,11 +201,8 @@ bool LocationProvider::_tryWifiGeolocation() {
         return false;
     }
 
-    // Build request JSON with up to 10 strongest APs
     JsonDocument doc;
     JsonArray aps = doc["wifiAccessPoints"].to<JsonArray>();
-
-    // Cap at 10 APs
     int count = (n > 10) ? 10 : n;
     for (int i = 0; i < count; i++) {
         JsonObject ap = aps.add<JsonObject>();
@@ -130,13 +210,11 @@ bool LocationProvider::_tryWifiGeolocation() {
         ap["signalStrength"] = WiFi.RSSI(i);
         ap["channel"]       = WiFi.channel(i);
     }
-
     WiFi.scanDelete();
 
     String payload;
     serializeJson(doc, payload);
 
-    // POST to Google Geolocation API
     HTTPClient http;
     String url = "https://www.googleapis.com/geolocation/v1/geolocate?key=" + _googleApiKey;
     http.begin(url);
@@ -144,7 +222,6 @@ bool LocationProvider::_tryWifiGeolocation() {
     http.setTimeout(5000);
 
     int httpCode = http.POST(payload);
-
     if (httpCode != HTTP_CODE_OK) {
         debugWS.log(MOD_GPS, LVL_WARN,
             "[Location] WiFi geo HTTP error: " + String(httpCode));
@@ -155,23 +232,17 @@ bool LocationProvider::_tryWifiGeolocation() {
     String response = http.getString();
     http.end();
 
-    // Parse response: { "location": { "lat": ..., "lng": ... }, "accuracy": ... }
     JsonDocument respDoc;
     DeserializationError err = deserializeJson(respDoc, response);
-    if (err) {
+    if (err || !respDoc["location"].is<JsonObject>()) {
         debugWS.log(MOD_GPS, LVL_WARN, "[Location] WiFi geo JSON parse error.");
-        return false;
-    }
-
-    if (!respDoc["location"].is<JsonObject>()) {
-        debugWS.log(MOD_GPS, LVL_WARN, "[Location] WiFi geo: no location in response.");
         return false;
     }
 
     _lat      = respDoc["location"]["lat"].as<double>();
     _lon      = respDoc["location"]["lng"].as<double>();
     _accuracy = respDoc["accuracy"].as<float>();
-    _alt      = 0.0f;   // WiFi geo does not provide altitude
+    _alt      = 0.0f;
     _speed    = 0.0f;
     _heading  = 0.0f;
 

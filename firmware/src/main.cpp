@@ -98,7 +98,7 @@ void setup() {
     }
     debugWS.log(MOD_WIFI, LVL_INFO, "[RadiaLog] WiFi initialized. AP: " + wifi.getAPIP().toString());
 
-    // 6. NTP sync + mDNS on WiFi connect
+    // 6. NTP sync + mDNS + upload check on WiFi connect
     wifi.registerOnConnect([]() {
         configTime(0, 0, NTP_SERVER_1, NTP_SERVER_2);
         if (MDNS.begin("radialog")) {
@@ -106,10 +106,11 @@ void setup() {
             debugWS.log(MOD_WIFI, LVL_INFO, "[RadiaLog] mDNS started: http://radialog.local");
         }
         debugWS.log(MOD_WIFI, LVL_INFO, "[RadiaLog] STA IP: " + WiFi.localIP().toString());
+        uploader.onWifiConnect();
     });
 
     // 7. Status portal
-    portal.begin(configMgr, readingBuffer, radiaCode, gps, wifi, uploader);
+    portal.begin(configMgr, readingBuffer, radiaCode, gps, wifi, uploader, &radiaCodeMgr);
     debugWS.log(MOD_BUFFER, LVL_INFO, "[RadiaLog] Status portal started on " + wifi.getAPIP().toString());
 
     // 8. Upload manager (FreeRTOS task on core 0)
@@ -157,7 +158,7 @@ void setup() {
 
     // 10b. Location provider (clears cached position on boot)
     locationProvider.begin(configMgr.getGoogleApiKey());
-    debugWS.log(MOD_GPS, LVL_INFO, "[RadiaLog] LocationProvider initialized (cache cleared).");
+    debugWS.log(MOD_GPS, LVL_INFO, "[RadiaLog] LocationProvider initialized.");
 
     // 11. Battery ADC
     battery.begin();
@@ -186,7 +187,11 @@ void setup() {
 // =============================================================================
 // loop()
 // =============================================================================
+static uint32_t loopCounter = 0;
+
 void loop() {
+    loopCounter++;
+
     // --- 0. WiFi reconnect ---------------------------------------------------
     wifi.update();
 
@@ -194,13 +199,23 @@ void loop() {
     auto deviceReadings = radiaCodeMgr.poll();
     bool anyDeviceOk = !deviceReadings.empty();
 
-    // Track highest dose for display/LED (across all devices)
-    float dose_rate  = 0.0f;
-    float count_rate = 0.0f;
-    for (const auto& dr : deviceReadings) {
-        if (dr.dose_rate > dose_rate) {
-            dose_rate  = dr.dose_rate;
-            count_rate = dr.count_rate;
+    // USB takes priority; fall back to BLE if no USB reading.
+    // Static so we retain the last known value between polls.
+    static float dose_rate  = 0.0f;
+    static float count_rate = 0.0f;
+    if (!deviceReadings.empty()) {
+        bool foundUsb = false;
+        for (const auto& dr : deviceReadings) {
+            if (dr.deviceId == "USB") {
+                dose_rate  = dr.dose_rate;
+                count_rate = dr.count_rate;
+                foundUsb = true;
+                break;
+            }
+        }
+        if (!foundUsb) {
+            dose_rate  = deviceReadings[0].dose_rate;
+            count_rate = deviceReadings[0].count_rate;
         }
     }
 
@@ -271,7 +286,8 @@ void loop() {
         }
 
         DisplayStatus ds;
-        ds.usbConnected   = radiaCodeMgr.connectedCount() > 0;
+        ds.rcConnected    = radiaCodeMgr.connectedCount() > 0;
+        ds.rcIsUsb        = radiaCodeMgr.isUsbConnected();
         ds.wifiConnected  = wifi.isSTAConnected();
         ds.wifiSSID       = wifi.getSSID();
         ds.staIP          = wifi.getSTAIP().toString();
@@ -284,6 +300,7 @@ void loop() {
         ds.batteryPercent = battery.getPercent();
         ds.gpsFix         = locationValid;
         ds.gpsSats        = gps.getSatellites();
+        ds.loopCount      = loopCounter;
 
         display.draw(ds);
     }

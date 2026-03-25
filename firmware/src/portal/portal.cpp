@@ -41,13 +41,15 @@ StatusPortal::StatusPortal()
 }
 
 void StatusPortal::begin(ConfigMgr& cfg, ReadingBuffer& buf, radiacode::RadiaCode& rc,
-                         GPS& gps, WifiMgr& wifi, Uploader& uploader) {
+                         GPS& gps, WifiMgr& wifi, Uploader& uploader,
+                         radiacode::RadiaCodeMgr* rcMgr) {
     _cfg      = &cfg;
     _buf      = &buf;
     _rc       = &rc;
     _gps      = &gps;
     _wifi     = &wifi;
     _uploader = &uploader;
+    _rcMgr    = rcMgr;
 
     _server = new AsyncWebServer(80);
 
@@ -184,6 +186,34 @@ void StatusPortal::_registerRoutes() {
 
                 bool ok = _cfg->save();
 
+                // Apply new WiFi credentials immediately (without reboot)
+                if (ok && _wifi) {
+                    std::vector<WifiCredentials> networks;
+                    for (int w = 0; w < _cfg->getWifiCount(); w++) {
+                        WifiCredentials cred;
+                        cred.ssid     = _cfg->getWifiSSID(w);
+                        cred.password = _cfg->getWifiPass(w);
+                        cred.priority = static_cast<uint8_t>(w);
+                        networks.push_back(cred);
+                    }
+                    if (!networks.empty()) {
+                        _wifi->setNetworks(networks);
+                        _wifi->connectSTA();
+                        debugWS.log(MOD_WIFI, LVL_INFO,
+                            "[WiFi] Credentials updated, connecting to "
+                            + networks[0].ssid + "...");
+                    }
+                }
+
+                // Apply new BLE device list immediately (without reboot)
+                if (ok && _rcMgr) {
+                    std::vector<String> bleMacs;
+                    for (int b = 0; b < _cfg->getBleDeviceCount(); b++) {
+                        bleMacs.push_back(_cfg->getBleDeviceMac(b));
+                    }
+                    _rcMgr->updateBleDevices(bleMacs);
+                }
+
                 JsonDocument resp;
                 resp["success"] = ok;
                 if (!ok) resp["error"] = "Failed to write config file";
@@ -268,13 +298,20 @@ void StatusPortal::_registerRoutes() {
 
     _server->on("/api/ble/scan", HTTP_POST, [](AsyncWebServerRequest* request) {
         if (_bleScanRunning) {
+            debugWS.log(MOD_BLE, LVL_WARN, "[BLE] Scan already running, ignoring request");
             request->send(200, "application/json",
                 "{\"status\":\"scanning\"}");
             return;
         }
 
+        debugWS.log(MOD_BLE, LVL_INFO, "[BLE] Scan requested");
+
         if (!NimBLEDevice::getInitialized()) {
+            debugWS.log(MOD_BLE, LVL_INFO, "[BLE] Initializing NimBLE stack...");
             NimBLEDevice::init("RadiaLog");
+            debugWS.log(MOD_BLE, LVL_INFO, "[BLE] NimBLE initialized");
+        } else {
+            debugWS.log(MOD_BLE, LVL_DEBUG, "[BLE] NimBLE already initialized");
         }
 
         _bleScanResults.clear();
@@ -285,8 +322,12 @@ void StatusPortal::_registerRoutes() {
         // the async web server (which would trigger a watchdog reset).
         xTaskCreatePinnedToCore(
             [](void*) {
+                debugWS.log(MOD_BLE, LVL_INFO, "[BLE] Scan task started on core "
+                    + String(xPortGetCoreID()));
+
                 NimBLEScan* scan = NimBLEDevice::getScan();
                 if (!scan) {
+                    debugWS.log(MOD_BLE, LVL_ERROR, "[BLE] getScan() returned null!");
                     _bleScanDone = true;
                     _bleScanRunning = false;
                     vTaskDelete(nullptr);
@@ -294,6 +335,7 @@ void StatusPortal::_registerRoutes() {
                 }
 
                 // Stop any in-progress scan first
+                debugWS.log(MOD_BLE, LVL_DEBUG, "[BLE] Stopping previous scan...");
                 scan->stop();
                 delay(100);
 
@@ -301,27 +343,62 @@ void StatusPortal::_registerRoutes() {
                 scan->setInterval(100);
                 scan->setWindow(99);
 
+                debugWS.log(MOD_BLE, LVL_INFO,
+                    "[BLE] Starting active scan (5s, interval=100, window=99)...");
                 NimBLEScanResults results = scan->start(5, false);
+
+                int total = results.getCount();
+                debugWS.log(MOD_BLE, LVL_INFO,
+                    "[BLE] Scan complete. Total devices found: " + String(total));
 
                 // RadiaCode BLE service UUID — match devices even if name is missing
                 static const NimBLEUUID RC_SVC("e63215e5-7003-49d8-96b0-b024798fb901");
 
                 _bleScanResults.clear();
-                for (int i = 0; i < results.getCount(); i++) {
+                for (int i = 0; i < total; i++) {
                     NimBLEAdvertisedDevice dev = results.getDevice(i);
+                    String mac  = dev.getAddress().toString().c_str();
                     String name = dev.getName().c_str();
-                    bool match = name.startsWith("RC-")
-                              || dev.isAdvertisingService(RC_SVC);
-                    if (match) {
+                    int rssi    = dev.getRSSI();
+                    bool hasName = name.length() > 0;
+                    bool nameMatch = name.startsWith("RC-");
+                    bool svcMatch  = dev.isAdvertisingService(RC_SVC);
+
+                    // Log every device with full details
+                    String svcList = "";
+                    if (dev.getServiceUUIDCount() > 0) {
+                        for (int s = 0; s < dev.getServiceUUIDCount(); s++) {
+                            if (s > 0) svcList += ", ";
+                            svcList += dev.getServiceUUID(s).toString().c_str();
+                        }
+                    } else {
+                        svcList = "(none)";
+                    }
+
+                    debugWS.log(MOD_BLE, LVL_INFO,
+                        "[BLE] Device " + String(i) + ": mac=" + mac
+                        + " name=" + (hasName ? ("\"" + name + "\"") : "(empty)")
+                        + " rssi=" + String(rssi)
+                        + " svcs=" + svcList
+                        + " nameMatch=" + String(nameMatch ? "Y" : "N")
+                        + " svcMatch=" + String(svcMatch ? "Y" : "N"));
+
+                    if (nameMatch || svcMatch) {
                         BleScanEntry entry;
-                        entry.name = name.length() > 0 ? name
-                                   : ("RC-" + String(dev.getAddress().toString().c_str()));
-                        entry.mac  = dev.getAddress().toString().c_str();
-                        entry.rssi = dev.getRSSI();
+                        entry.name = hasName ? name
+                                   : ("RC-" + mac);
+                        entry.mac  = mac;
+                        entry.rssi = rssi;
                         _bleScanResults.push_back(entry);
+                        debugWS.log(MOD_BLE, LVL_INFO,
+                            "[BLE] >> MATCHED as RadiaCode: " + entry.name);
                     }
                 }
                 scan->clearResults();
+
+                debugWS.log(MOD_BLE, LVL_INFO,
+                    "[BLE] Scan done. " + String(_bleScanResults.size())
+                    + " RadiaCode device(s) matched out of " + String(total));
 
                 _bleScanDone = true;
                 _bleScanRunning = false;
@@ -389,8 +466,13 @@ void StatusPortal::_handleApiStatus(AsyncWebServerRequest* request) {
     doc["wifi_ssid"]      = _wifi->getSSID();
     doc["wifi_sta_ip"]    = _wifi->getSTAIP().toString();
 
-    // USB / Devices
-    doc["usb_connected"] = _rc->isConnected();
+    // RadiaCode — USB priority, BLE fallback
+    bool usbOk = _rcMgr ? _rcMgr->isUsbConnected() : _rc->isConnected();
+    bool bleOk = _rcMgr ? (_rcMgr->bleConnectedCount() > 0) : false;
+    doc["usb_connected"] = usbOk;
+    doc["ble_connected"] = bleOk;
+    doc["rc_connected"]  = usbOk || bleOk;
+    doc["rc_source"]     = usbOk ? "USB" : (bleOk ? "BLE" : "None");
 
     // Buffer
     BufferStats stats = _buf->getStats();

@@ -12,8 +12,9 @@
 // Connects to RadiaCode devices via BLE using the same command/response protocol
 // as USB. Uses NimBLE-Arduino for the BLE client stack.
 //
-// BLE Service:        e63215e5-7003-49d8-96b0-b024798fb901
-// BLE Characteristic: e63215e6-7003-49d8-96b0-b024798fb901 (R/W/Notify)
+// BLE Service:            e63215e5-7003-49d8-96b0-b024798fb901
+// Write Characteristic:   e63215e6-7003-49d8-96b0-b024798fb901 (write-without-response)
+// Notify Characteristic:  e63215e7-7003-49d8-96b0-b024798fb901 (notify — responses)
 // =============================================================================
 
 #ifdef ARDUINO
@@ -25,13 +26,23 @@ namespace radiacode {
 class RadiaCodeBLE {
 public:
     // RadiaCode BLE UUIDs
-    static constexpr const char* SERVICE_UUID = "e63215e5-7003-49d8-96b0-b024798fb901";
-    static constexpr const char* CHAR_UUID    = "e63215e6-7003-49d8-96b0-b024798fb901";
+    static constexpr const char* SERVICE_UUID    = "e63215e5-7003-49d8-96b0-b024798fb901";
+    static constexpr const char* WRITE_CHAR_UUID = "e63215e6-7003-49d8-96b0-b024798fb901";
+    static constexpr const char* NOTIFY_CHAR_UUID = "e63215e7-7003-49d8-96b0-b024798fb901";
+
+    // BLE write chunk size (default ATT_MTU 23 - 3 ATT overhead - 2 handle = 18)
+    static constexpr size_t BLE_WRITE_CHUNK = 18;
 
     static constexpr uint32_t BLE_TIMEOUT_MS = 5000;
 
     RadiaCodeBLE();
     ~RadiaCodeBLE();
+
+    // Move-only: semaphore ownership must transfer cleanly
+    RadiaCodeBLE(RadiaCodeBLE&& other) noexcept;
+    RadiaCodeBLE& operator=(RadiaCodeBLE&& other) noexcept;
+    RadiaCodeBLE(const RadiaCodeBLE&) = delete;
+    RadiaCodeBLE& operator=(const RadiaCodeBLE&) = delete;
 
     /// Initialize the NimBLE stack. Call once before creating any instances.
     static void initBLE();
@@ -65,7 +76,8 @@ private:
 
 #ifdef ARDUINO
     NimBLEClient*               _client;
-    NimBLERemoteCharacteristic* _characteristic;
+    NimBLERemoteCharacteristic* _writeChar;
+    NimBLERemoteCharacteristic* _notifyChar;
     SemaphoreHandle_t           _responseSemaphore;
 #endif
 

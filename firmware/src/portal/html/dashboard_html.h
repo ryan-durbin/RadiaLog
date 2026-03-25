@@ -54,7 +54,7 @@ main{max-width:720px;margin:0 auto;padding:1rem}
   <div class="nav-status">
     <span class="dot dot-gray" id="nav-wifi" title="WiFi"></span>
     <span class="dot dot-gray" id="nav-gps" title="GPS"></span>
-    <span class="dot dot-gray" id="nav-usb" title="USB"></span>
+    <span class="dot dot-gray" id="nav-usb" title="RadiaCode"></span>
   </div>
 </nav>
 <div class="status-popup" id="status-popup"></div>
@@ -66,7 +66,7 @@ main{max-width:720px;margin:0 auto;padding:1rem}
     <div class="card-sm">
       <div class="card-title">Dose Rate</div>
       <div class="card-value" id="dose-rate">—</div>
-      <div class="detail">&micro;Sv/h</div>
+      <div class="detail">nSv/h</div>
     </div>
     <div class="card-sm">
       <div class="card-title">Count Rate</div>
@@ -95,8 +95,9 @@ main{max-width:720px;margin:0 auto;padding:1rem}
       <div class="detail" id="wifi-ssid" style="word-break:break-all"></div>
     </div>
     <div class="card-sm">
-      <div class="card-title">USB</div>
-      <div class="card-value" id="usb-status">—</div>
+      <div class="card-title">RadiaCode</div>
+      <div class="card-value" id="rc-status">—</div>
+      <div class="detail" id="rc-source"></div>
     </div>
   </div>
 
@@ -175,8 +176,8 @@ main{max-width:720px;margin:0 auto;padding:1rem}
         connLost.style.display='none';
 
         // Radiation
-        setText('dose-rate', typeof d.dose_rate==='number' ? d.dose_rate.toFixed(3) : '—');
-        setText('count-rate', typeof d.count_rate==='number' ? d.count_rate.toFixed(1) : '—');
+        setText('dose-rate', typeof d.dose_rate==='number' ? (d.dose_rate * 1000).toFixed(1) : '—');
+        setText('count-rate', typeof d.count_rate==='number' ? d.count_rate.toFixed(2) : '—');
 
         // GPS
         var gpsOk = d.gps_fix===true||d.gps_fix===1;
@@ -197,12 +198,13 @@ main{max-width:720px;margin:0 auto;padding:1rem}
         setText('wifi-ssid', d.wifi_ssid||'');
         dotColor('nav-wifi', wifiOk);
 
-        // USB
-        var usbOk=d.usb_connected===true||d.usb_connected===1;
-        setText('usb-status', usbOk?'Connected':'Disconnected');
-        var usbEl=document.getElementById('usb-status');
-        if(usbEl) usbEl.className='card-value '+(usbOk?'status-ok':'status-err');
-        dotColor('nav-usb', usbOk);
+        // RadiaCode (USB priority, BLE fallback)
+        var rcOk=d.rc_connected===true||d.rc_connected===1;
+        setText('rc-status', rcOk?'Connected':'Disconnected');
+        var rcEl=document.getElementById('rc-status');
+        if(rcEl) rcEl.className='card-value '+(rcOk?'status-ok':'status-err');
+        setText('rc-source', rcOk?('via '+d.rc_source):'');
+        dotColor('nav-usb', rcOk);
 
         // Buffer
         setText('buffer-pending', d.buffer_pending!=null?d.buffer_pending:'—');
@@ -259,7 +261,7 @@ main{max-width:720px;margin:0 auto;padding:1rem}
       h+='<div class="sr"><span class="sl">WiFi</span><span class="'+(d.wifi_connected?'st-ok':'st-err')+'" style="font-weight:600">'+(d.wifi_connected?(d.wifi_ssid||'Connected'):'Disconnected')+'</span></div>';
       if(d.wifi_sta_ip&&d.wifi_connected)h+='<div class="sr"><span class="sl">IP</span><span style="color:#58a6ff">'+d.wifi_sta_ip+'</span></div>';
       h+='<div class="sr"><span class="sl">GPS</span><span class="'+(d.gps_fix?'st-ok':'st-warn')+'" style="font-weight:600">'+(d.gps_fix?d.gps_sats+' sats':'No Fix')+'</span></div>';
-      h+='<div class="sr"><span class="sl">USB</span><span class="'+(d.usb_connected?'st-ok':'st-err')+'" style="font-weight:600">'+(d.usb_connected?'Connected':'Disconnected')+'</span></div>';
+      h+='<div class="sr"><span class="sl">RadiaCode</span><span class="'+(d.rc_connected?'st-ok':'st-err')+'" style="font-weight:600">'+(d.rc_connected?(d.rc_source):'Disconnected')+'</span></div>';
       h+='<div class="sr"><span class="sl">Buffer</span><span style="color:#c9d1d9;font-weight:600">'+d.buffer_pending+' pending</span></div>';
       h+='<div class="sr"><span class="sl">Upload</span><span style="color:#c9d1d9">'+(d.last_upload||'Never')+'</span></div>';
       popup.innerHTML=h;

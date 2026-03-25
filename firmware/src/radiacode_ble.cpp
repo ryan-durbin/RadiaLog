@@ -46,7 +46,8 @@ RadiaCodeBLE::RadiaCodeBLE()
     , _base_time(0)
 #ifdef ARDUINO
     , _client(nullptr)
-    , _characteristic(nullptr)
+    , _writeChar(nullptr)
+    , _notifyChar(nullptr)
     , _responseSemaphore(nullptr)
 #endif
     , _expectedResponseLen(0)
@@ -65,6 +66,60 @@ RadiaCodeBLE::~RadiaCodeBLE() {
         _responseSemaphore = nullptr;
     }
 #endif
+}
+
+RadiaCodeBLE::RadiaCodeBLE(RadiaCodeBLE&& other) noexcept
+    : _macAddress(std::move(other._macAddress))
+    , _connected(other._connected)
+    , _seq(other._seq)
+    , _base_time(other._base_time)
+#ifdef ARDUINO
+    , _client(other._client)
+    , _writeChar(other._writeChar)
+    , _notifyChar(other._notifyChar)
+    , _responseSemaphore(other._responseSemaphore)
+#endif
+    , _responseBuffer(std::move(other._responseBuffer))
+    , _expectedResponseLen(other._expectedResponseLen)
+    , _responseReady(other._responseReady)
+{
+    other._connected = false;
+#ifdef ARDUINO
+    other._client = nullptr;
+    other._writeChar = nullptr;
+    other._notifyChar = nullptr;
+    other._responseSemaphore = nullptr;
+#endif
+}
+
+RadiaCodeBLE& RadiaCodeBLE::operator=(RadiaCodeBLE&& other) noexcept {
+    if (this != &other) {
+        disconnect();
+#ifdef ARDUINO
+        if (_responseSemaphore) {
+            vSemaphoreDelete(_responseSemaphore);
+        }
+#endif
+        _macAddress = std::move(other._macAddress);
+        _connected = other._connected;
+        _seq = other._seq;
+        _base_time = other._base_time;
+#ifdef ARDUINO
+        _client = other._client;
+        _writeChar = other._writeChar;
+        _notifyChar = other._notifyChar;
+        _responseSemaphore = other._responseSemaphore;
+        other._client = nullptr;
+        other._writeChar = nullptr;
+        other._notifyChar = nullptr;
+        other._responseSemaphore = nullptr;
+#endif
+        _responseBuffer = std::move(other._responseBuffer);
+        _expectedResponseLen = other._expectedResponseLen;
+        _responseReady = other._responseReady;
+        other._connected = false;
+    }
+    return *this;
 }
 
 // ============================================================================
@@ -93,13 +148,13 @@ Error RadiaCodeBLE::connect(const String& macAddress) {
 
     _macAddress = macAddress;
 
-    debugWS.log(MOD_USB, LVL_INFO,
+    debugWS.log(MOD_BLE, LVL_INFO,
         "[BLE] Connecting to RadiaCode at " + macAddress + "...");
 
     // Create a NimBLE client
     _client = NimBLEDevice::createClient();
     if (!_client) {
-        debugWS.log(MOD_USB, LVL_WARN, "[BLE] Failed to create client.");
+        debugWS.log(MOD_BLE, LVL_WARN, "[BLE] Failed to create client.");
         return Error::CONNECT_FAILED;
     }
 
@@ -108,7 +163,7 @@ Error RadiaCodeBLE::connect(const String& macAddress) {
     // Connect by MAC address
     NimBLEAddress addr(macAddress.c_str());
     if (!_client->connect(addr)) {
-        debugWS.log(MOD_USB, LVL_WARN,
+        debugWS.log(MOD_BLE, LVL_WARN,
             "[BLE] Failed to connect to " + macAddress);
         NimBLEDevice::deleteClient(_client);
         _client = nullptr;
@@ -118,37 +173,51 @@ Error RadiaCodeBLE::connect(const String& macAddress) {
     // Discover the RadiaCode service
     NimBLERemoteService* service = _client->getService(SERVICE_UUID);
     if (!service) {
-        debugWS.log(MOD_USB, LVL_WARN, "[BLE] RadiaCode service not found.");
+        debugWS.log(MOD_BLE, LVL_WARN, "[BLE] RadiaCode service not found.");
         _client->disconnect();
         NimBLEDevice::deleteClient(_client);
         _client = nullptr;
         return Error::DEVICE_NOT_FOUND;
     }
 
-    // Get the command/response characteristic
-    _characteristic = service->getCharacteristic(CHAR_UUID);
-    if (!_characteristic) {
-        debugWS.log(MOD_USB, LVL_WARN, "[BLE] RadiaCode characteristic not found.");
+    // Get the WRITE characteristic (e63215e6 — write-without-response)
+    _writeChar = service->getCharacteristic(WRITE_CHAR_UUID);
+    if (!_writeChar) {
+        debugWS.log(MOD_BLE, LVL_WARN, "[BLE] Write characteristic not found.");
         _client->disconnect();
         NimBLEDevice::deleteClient(_client);
         _client = nullptr;
         return Error::DEVICE_NOT_FOUND;
     }
 
-    // Subscribe to notifications for receiving responses
-    if (_characteristic->canNotify()) {
-        // Use a lambda that captures this instance pointer
-        _characteristic->subscribe(true,
+    // Get the NOTIFY characteristic (e63215e7 — notifications for responses)
+    _notifyChar = service->getCharacteristic(NOTIFY_CHAR_UUID);
+    if (!_notifyChar) {
+        debugWS.log(MOD_BLE, LVL_WARN, "[BLE] Notify characteristic not found.");
+        _client->disconnect();
+        NimBLEDevice::deleteClient(_client);
+        _client = nullptr;
+        return Error::DEVICE_NOT_FOUND;
+    }
+
+    // Subscribe to notifications on the NOTIFY characteristic
+    if (_notifyChar->canNotify()) {
+        _notifyChar->subscribe(true,
             [this](NimBLERemoteCharacteristic* chr, uint8_t* data,
                    size_t length, bool isNotify) {
                 this->onNotify(data, length);
             });
+        debugWS.log(MOD_BLE, LVL_INFO,
+            "[BLE] Subscribed to notifications on " + macAddress);
+    } else {
+        debugWS.log(MOD_BLE, LVL_WARN,
+            "[BLE] Notify characteristic does not support notifications!");
     }
 
     _connected = true;
     _seq = 0;
 
-    debugWS.log(MOD_USB, LVL_INFO,
+    debugWS.log(MOD_BLE, LVL_INFO,
         "[BLE] Connected to RadiaCode at " + macAddress);
 
     return Error::OK;
@@ -166,7 +235,8 @@ void RadiaCodeBLE::disconnect() {
         NimBLEDevice::deleteClient(_client);
         _client = nullptr;
     }
-    _characteristic = nullptr;
+    _writeChar = nullptr;
+    _notifyChar = nullptr;
 #endif
     _connected = false;
 }
@@ -188,7 +258,8 @@ void RadiaCodeBLE::onNotify(const uint8_t* data, size_t len) {
         _responseBuffer.size() >= 4 + _expectedResponseLen) {
         _responseReady = true;
 #ifdef ARDUINO
-        xSemaphoreGiveFromISR(_responseSemaphore, nullptr);
+        // NimBLE callbacks run in task context, not ISR — use xSemaphoreGive
+        xSemaphoreGive(_responseSemaphore);
 #endif
     }
 }
@@ -200,7 +271,7 @@ void RadiaCodeBLE::onNotify(const uint8_t* data, size_t len) {
 Error RadiaCodeBLE::execute(const std::vector<uint8_t>& request,
                              std::vector<uint8_t>& response) {
 #ifdef ARDUINO
-    if (!_connected || !_characteristic) {
+    if (!_connected || !_writeChar || !_notifyChar) {
         return Error::NOT_CONNECTED;
     }
 
@@ -215,23 +286,33 @@ Error RadiaCodeBLE::execute(const std::vector<uint8_t>& request,
     _expectedResponseLen = 0;
     _responseReady = false;
 
-    // Write request to characteristic (NimBLE handles MTU chunking)
-    if (!_characteristic->writeValue(request.data(), request.size(), true)) {
+    // Write request (use write-with-response for reliability)
+    if (!_writeChar->writeValue(request.data(), request.size(), true)) {
+        debugWS.log(MOD_BLE, LVL_WARN,
+            "[BLE:" + _macAddress + "] writeValue failed, len=" + String(request.size()));
         return Error::WRITE_FAILED;
     }
 
     // Wait for notification response
     if (xSemaphoreTake(_responseSemaphore, pdMS_TO_TICKS(BLE_TIMEOUT_MS)) != pdTRUE) {
+        debugWS.log(MOD_BLE, LVL_WARN,
+            "[BLE:" + _macAddress + "] execute timeout, no notification received");
         return Error::READ_TIMEOUT;
     }
 
     if (!_responseReady || _responseBuffer.size() < 4) {
+        debugWS.log(MOD_BLE, LVL_WARN,
+            "[BLE:" + _macAddress + "] incomplete response, size="
+            + String(_responseBuffer.size()));
         return Error::READ_FAILED;
     }
 
     // Parse response: skip 4-byte length prefix
     uint32_t respLen = unpackLE32(_responseBuffer.data());
     if (_responseBuffer.size() < 4 + respLen) {
+        debugWS.log(MOD_BLE, LVL_WARN,
+            "[BLE:" + _macAddress + "] response truncated, expected="
+            + String(respLen) + " got=" + String(_responseBuffer.size() - 4));
         return Error::READ_FAILED;
     }
 
@@ -276,11 +357,10 @@ Error RadiaCodeBLE::sendCommand(COMMAND command_id,
 }
 
 std::vector<uint8_t> RadiaCodeBLE::read_request(VS vs_id) {
-    uint16_t id = static_cast<uint16_t>(vs_id);
-    std::vector<uint8_t> args = {
-        static_cast<uint8_t>(id & 0xFF),
-        static_cast<uint8_t>((id >> 8) & 0xFF),
-    };
+    // BLE protocol uses 4-byte LE VS ID (matching Web Bluetooth reference)
+    uint32_t id = static_cast<uint32_t>(vs_id);
+    std::vector<uint8_t> args(4);
+    packLE32(args.data(), id);
     return buildRequest(static_cast<uint16_t>(COMMAND::RD_VIRT_STRING), args);
 }
 
@@ -307,7 +387,7 @@ bool RadiaCodeBLE::init() {
         std::vector<uint8_t> resp;
         Error err = sendCommand(COMMAND::SET_EXCHANGE, args, resp);
         if (err != Error::OK) {
-            debugWS.log(MOD_USB, LVL_WARN,
+            debugWS.log(MOD_BLE, LVL_WARN,
                 "[BLE:" + _macAddress + "] SET_EXCHANGE failed.");
             return false;
         }
@@ -321,7 +401,7 @@ bool RadiaCodeBLE::init() {
         std::vector<uint8_t> resp;
         Error err = sendCommand(COMMAND::SET_TIME, args, resp);
         if (err != Error::OK) {
-            debugWS.log(MOD_USB, LVL_WARN,
+            debugWS.log(MOD_BLE, LVL_WARN,
                 "[BLE:" + _macAddress + "] SET_TIME failed.");
             return false;
         }
@@ -333,7 +413,7 @@ bool RadiaCodeBLE::init() {
         std::vector<uint8_t> resp;
         Error err = execute(req, resp);
         if (err != Error::OK) {
-            debugWS.log(MOD_USB, LVL_WARN,
+            debugWS.log(MOD_BLE, LVL_WARN,
                 "[BLE:" + _macAddress + "] DEVICE_TIME write failed.");
             return false;
         }
@@ -351,12 +431,12 @@ bool RadiaCodeBLE::init() {
             size_t copy_len = resp.size() < sizeof(ver_str) - 1
                             ? resp.size() : sizeof(ver_str) - 1;
             memcpy(ver_str, resp.data(), copy_len);
-            debugWS.log(MOD_USB, LVL_INFO,
+            debugWS.log(MOD_BLE, LVL_INFO,
                 "[BLE:" + _macAddress + "] FW version: " + String(ver_str));
         }
     }
 
-    debugWS.log(MOD_USB, LVL_INFO,
+    debugWS.log(MOD_BLE, LVL_INFO,
         "[BLE:" + _macAddress + "] Init sequence complete.");
     return true;
 }
@@ -371,23 +451,54 @@ std::vector<RadiaCodeReading> RadiaCodeBLE::readDataBuf() {
 
     Error err = execute(request, response);
     if (err != Error::OK || response.empty()) {
-        // Check if we lost connection
         if (err == Error::NOT_CONNECTED) {
             _connected = false;
         }
+        debugWS.log(MOD_BLE, LVL_WARN,
+            "[BLE:" + _macAddress + "] readDataBuf execute err="
+            + String(static_cast<int>(err)) + " resp_size=" + String(response.size()));
         return {};
     }
 
-    if (response.size() <= 4) {
+    // BLE RD_VIRT_STRING response layout (after length prefix stripped by execute):
+    //   cmd_header(4) + retcode(4) + flen(4) + data(flen)
+    // Need at least 12 bytes for headers before any actual data.
+    if (response.size() <= 12) {
+        debugWS.log(MOD_BLE, LVL_DEBUG,
+            "[BLE:" + _macAddress + "] readDataBuf no data (resp_size="
+            + String(response.size()) + ")");
         return {};
     }
 
-    const uint8_t* data = response.data() + 4;
-    size_t data_len = response.size() - 4;
+    // Skip cmd_header(4), then parse retcode(4) and flen(4)
+    uint32_t retcode = unpackLE32(response.data() + 4);
+    uint32_t flen    = unpackLE32(response.data() + 8);
+
+    if (retcode != 1) {
+        debugWS.log(MOD_BLE, LVL_WARN,
+            "[BLE:" + _macAddress + "] readDataBuf bad retcode=" + String(retcode));
+        return {};
+    }
+
+    if (flen == 0 || 12 + flen > response.size()) {
+        debugWS.log(MOD_BLE, LVL_DEBUG,
+            "[BLE:" + _macAddress + "] readDataBuf flen=" + String(flen)
+            + " resp_size=" + String(response.size()));
+        return {};
+    }
+
+    const uint8_t* data = response.data() + 12;
+    size_t data_len = flen;
     uint64_t base_time_ms = static_cast<uint64_t>(_base_time) * 1000ULL;
 
-    // Reuse the static parser from the USB RadiaCode class
-    return RadiaCode::parseDataBuf(data, data_len, base_time_ms);
+    auto readings = RadiaCode::parseDataBuf(data, data_len, base_time_ms);
+    if (!readings.empty()) {
+        debugWS.log(MOD_BLE, LVL_INFO,
+            "[BLE:" + _macAddress + "] " + String(readings.size())
+            + " readings, dose=" + String(readings.back().dose_rate, 4)
+            + " cps=" + String(readings.back().count_rate, 2));
+    }
+    return readings;
 }
 
 } // namespace radiacode

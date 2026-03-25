@@ -7,17 +7,18 @@
 
 // =============================================================================
 // RadiaLog Firmware - Location Provider
-// Resolves device position via fallback chain: GPS → cached → WiFi geolocation.
-// Cache is cleared on boot; expires after 2 minutes of no updates.
+// Resolves device position via fallback chain: GPS → stored → WiFi geolocation.
+// Last known position is persisted to LittleFS and used for GPS aiding on boot.
+// WiFi geolocation only fires when the WiFi environment changes (new BSSIDs).
 // =============================================================================
 
 class LocationProvider {
 public:
-    enum class Source { NONE, GPS, CACHED, WIFI_GEO };
+    enum class Source { NONE, GPS, STORED, WIFI_GEO };
 
     LocationProvider();
 
-    /// Call once in setup(). Clears all cached state.
+    /// Call once in setup().
     void begin(const String& googleApiKey);
 
     /// Call every loop iteration after gps.poll().
@@ -38,21 +39,26 @@ private:
     float  _alt, _speed, _heading, _accuracy;
     Source  _source;
 
-    // Cached last-known position
-    double   _cachedLat, _cachedLon;
-    float    _cachedAlt, _cachedSpeed, _cachedHeading, _cachedAccuracy;
-    unsigned long _cachedAtMs;
-    bool     _cacheValid;
-
-    static constexpr unsigned long CACHE_EXPIRY_MS    = 120000UL;  // 2 minutes
-    static constexpr unsigned long WIFI_GEO_COOLDOWN_MS = 30000UL; // 30s between attempts
+    static constexpr unsigned long WIFI_GEO_COOLDOWN_MS  = 30000UL;  // min interval between API calls
 
     // WiFi geolocation
     String _googleApiKey;
     unsigned long _lastWifiGeoAttemptMs;
     bool _tryWifiGeolocation();
 
-    void _updateCache(double lat, double lon, float alt, float speed, float heading, float accuracy);
+    // Persistent position (survives reboots, used for GPS aiding + initial position)
+    bool _loadStoredPosition();
+    void _saveStoredPosition(double lat, double lon, float alt, float accuracy);
+    bool _storedValid;
+    double _storedLat, _storedLon;
+    float  _storedAlt, _storedAccuracy;
+
+    // WiFi environment fingerprint — only re-call API when BSSIDs change
+    String _lastWifiFingerprintHash;
+    String _computeWifiFingerprint();
+
+    // A-GPS aiding state
+    bool _aidingInjected;
 };
 
 #endif // LOCATION_PROVIDER_H

@@ -10,6 +10,8 @@ ATGM336H::ATGM336H(HardwareSerial& serial, int txPin, int rxPin, uint32_t baud)
     , _txPin(txPin)
     , _rxPin(rxPin)
     , _baud(baud)
+    , _timeInjected(false)
+    , _posInjected(false)
     , _hasFix(false)
     , _lat(0.0)
     , _lon(0.0)
@@ -99,4 +101,42 @@ float ATGM336H::getAccuracy() const {
 
 int ATGM336H::getSatellites() const {
     return _satellites;
+}
+
+// =============================================================================
+// A-GPS: time and position aiding via PCAS commands
+// =============================================================================
+
+void ATGM336H::_sendCommand(const String& cmd) {
+    // Compute NMEA XOR checksum over chars between $ and *
+    uint8_t cksum = 0;
+    for (size_t i = 1; i < cmd.length(); i++) {
+        cksum ^= static_cast<uint8_t>(cmd[i]);
+    }
+    char buf[8];
+    snprintf(buf, sizeof(buf), "*%02X\r\n", cksum);
+    _serial.print(cmd);
+    _serial.print(buf);
+}
+
+void ATGM336H::injectTime(uint16_t year, uint8_t month, uint8_t day,
+                           uint8_t hour, uint8_t min, uint8_t sec) {
+    if (_timeInjected) return;
+
+    // $PCAS10,<year>,<month>,<day>,<hour>,<min>,<sec>
+    char cmd[48];
+    snprintf(cmd, sizeof(cmd), "$PCAS10,%u,%u,%u,%u,%u,%u",
+             year, month, day, hour, min, sec);
+    _sendCommand(String(cmd));
+    _timeInjected = true;
+}
+
+void ATGM336H::injectPosition(double lat, double lon, float altM) {
+    if (_posInjected) return;
+
+    // $PCAS11,<lat>,<lon>,<alt>  (decimal degrees, meters)
+    char cmd[64];
+    snprintf(cmd, sizeof(cmd), "$PCAS11,%.6f,%.6f,%.1f", lat, lon, altM);
+    _sendCommand(String(cmd));
+    _posInjected = true;
 }

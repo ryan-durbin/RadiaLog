@@ -184,11 +184,14 @@ function addWifi(){
   document.getElementById('new-ssid').value='';
   document.getElementById('new-pass').value='';
   renderWifi();
+  saveSettings();
+  toast('Connecting to '+ssid+'...');
 }
 
 function removeWifi(i){
   wifiNetworks.splice(i,1);
   renderWifi();
+  saveSettings();
 }
 
 function renderBle(){
@@ -204,6 +207,7 @@ function renderBle(){
 function removeBle(i){
   bleDevices.splice(i,1);
   renderBle();
+  saveSettings();
 }
 
 function addBleFromScan(mac){
@@ -212,8 +216,9 @@ function addBleFromScan(mac){
   if(bleDevices.indexOf(mac)>=0){toast('Device already added',true);return;}
   bleDevices.push(mac);
   renderBle();
-  toast('Added '+mac);
   renderScanResults(lastScanResults);
+  saveSettings();
+  toast('Added '+mac+', saving...');
 }
 
 var lastScanResults=[];

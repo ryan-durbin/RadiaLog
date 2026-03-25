@@ -31,12 +31,19 @@ public:
     float getAccuracy() const override;
     int getSatellites() const override;
 
+    void injectTime(uint16_t year, uint8_t month, uint8_t day,
+                    uint8_t hour, uint8_t min, uint8_t sec) override;
+    void injectPosition(double lat, double lon, float altM) override;
+
 private:
+    void _sendCommand(const String& cmd);
     HardwareSerial& _serial;
     TinyGPSPlus     _gps;
     int      _txPin;
     int      _rxPin;
     uint32_t _baud;
+    bool     _timeInjected;
+    bool     _posInjected;
     bool     _hasFix;
     double   _lat;
     double   _lon;

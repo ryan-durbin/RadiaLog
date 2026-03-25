@@ -4,11 +4,11 @@
 
 // =============================================================================
 // RadiaLog Firmware - Upload Manager
-// Runs as a FreeRTOS task on core 0, uploads unsent readings via HTTPS.
-// Batches up to 10,000 readings per request with exponential backoff.
+// Runs as a FreeRTOS task on core 0. Uploads once per day (midnight UTC +
+// random jitter) or immediately on WiFi connect if >24h since last upload.
+// Batches readings in chunks to avoid heap exhaustion.
 // =============================================================================
 
-// Forward declarations to avoid circular dependencies
 class ReadingBuffer;
 class WifiMgr;
 
@@ -24,13 +24,13 @@ public:
     Uploader();
 
     /// Start the uploader FreeRTOS task (pinned to core 0).
-    /// @param config  Upload endpoint configuration
-    /// @param buffer  Pointer to the ReadingBuffer for fetching unuploaded readings
-    /// @param wifi    Pointer to WifiMgr for checking STA connection status
     void begin(const UploadConfig& config, ReadingBuffer* buffer, WifiMgr* wifi);
 
-    /// Signal the upload task to wake up and attempt upload immediately.
+    /// Signal the upload task to wake and check if an upload is due.
     void forceUpload();
+
+    /// Call when WiFi connects — triggers upload if overdue.
+    void onWifiConnect();
 
     /// Returns millis() timestamp of the last successful upload, or 0 if none.
     unsigned long getLastUploadTime() const;
@@ -39,43 +39,43 @@ public:
     bool isUploading() const;
 
 private:
-    // Upload endpoint config
-    UploadConfig _config;
-
-    // Dependencies (non-owning pointers)
+    UploadConfig   _config;
     ReadingBuffer* _buffer;
     WifiMgr*       _wifi;
 
-    // State
     volatile bool          _uploading;
     volatile unsigned long _lastUploadTime;
     volatile bool          _forceFlag;
-
-    // FreeRTOS task handle
-    TaskHandle_t _taskHandle;
+    TaskHandle_t           _taskHandle;
 
     // Exponential backoff state
     unsigned long _backoffMs;
     static constexpr unsigned long BACKOFF_INITIAL_MS = 1000UL;
     static constexpr unsigned long BACKOFF_MAX_MS     = 300000UL; // 5 minutes
 
-    // Upload batch size — keep small to avoid heap exhaustion.
-    // Each Reading is ~48 bytes; 50 readings ≈ 2.4KB heap + ~10KB JSON.
-    static constexpr uint32_t MAX_BATCH_SIZE = 50;
+    // Upload batch — chunked to stay within heap limits.
+    // Each reading ≈ 200 bytes JSON; 500 readings ≈ 100KB payload.
+    static constexpr uint32_t MAX_BATCH_SIZE = 500;
 
-    // Task timing
-    static constexpr unsigned long UPLOAD_CYCLE_MS = 30000UL; // 30s between cycles
+    // Task checks every 60s whether an upload is due.
+    static constexpr unsigned long CHECK_INTERVAL_MS = 60000UL;
 
-    // Task stack and priority — needs room for HTTP + JSON serialization
     static constexpr uint32_t TASK_STACK_SIZE = 12288;
     static constexpr UBaseType_t TASK_PRIORITY = 1;
 
-    /// FreeRTOS task entry point (static).
+    // Scheduling state
+    time_t   _lastUploadEpoch;     // Unix time of last successful upload (persisted)
+    uint8_t  _jitterMinutes;       // Random 0-59 minute offset for daily upload
+    bool     _uploadDueOnConnect;  // Set by onWifiConnect if overdue
+
+    /// Check if an upload should happen now.
+    bool _isUploadDue() const;
+
+    /// Persist/load the last upload timestamp so it survives reboots.
+    void _saveLastUploadEpoch();
+    void _loadLastUploadEpoch();
+
     static void _uploadTask(void* pvParameters);
-
-    /// Run one upload cycle: fetch batch, POST, mark uploaded. Repeat until drained.
     void _runUploadCycle();
-
-    /// POST a batch of readings. Returns true on success.
     bool _postBatch(const uint8_t* jsonPayload, size_t len);
 };

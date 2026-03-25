@@ -7,6 +7,7 @@
 #include "../config_mgr.h"
 #include "../buffer.h"
 #include "../radiacode.h"
+#include "../radiacode_mgr.h"
 #include "../gps/gps.h"
 #include "../wifi_mgr.h"
 #include "../uploader.h"
@@ -23,7 +24,8 @@ public:
 
     /// Start the async web server and register all routes.
     void begin(ConfigMgr& cfg, ReadingBuffer& buf, radiacode::RadiaCode& rc,
-               GPS& gps, WifiMgr& wifi, Uploader& uploader);
+               GPS& gps, WifiMgr& wifi, Uploader& uploader,
+               radiacode::RadiaCodeMgr* rcMgr = nullptr);
 
     /// Update latest radiation reading values (called from main loop).
     void updateReading(float doseRate, float countRate);
@@ -42,6 +44,7 @@ private:
     GPS*                  _gps;
     WifiMgr*              _wifi;
     Uploader*             _uploader;
+    radiacode::RadiaCodeMgr* _rcMgr;
 
     volatile float   _doseRate;
     volatile float   _countRate;

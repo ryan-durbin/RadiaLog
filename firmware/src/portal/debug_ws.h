@@ -28,7 +28,8 @@ enum LogModule {
     MOD_GPS    = 1,
     MOD_WIFI   = 2,
     MOD_UPLOAD = 3,
-    MOD_BUFFER = 4
+    MOD_BUFFER = 4,
+    MOD_BLE    = 5
 };
 
 // ---------------------------------------------------------------------------

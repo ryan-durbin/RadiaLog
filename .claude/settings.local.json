@@ -22,7 +22,15 @@
       "Bash(find /home/ryandurbin/projects/RadiaLog -name usb_transport.py -o -name *protocol* -type f)",
       "Bash(git show:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(curl -s \"https://api.github.com/repos/cdump/radiacode/contents/\")",
+      "Bash(python3 -c \"import json,sys; [print\\(f[''''name''''], f[''''type'''']\\) for f in json.loads\\(sys.stdin.read\\(\\)\\)]\")",
+      "Bash(curl -s \"https://api.github.com/repos/cdump/radiacode/contents/radiacode\")",
+      "Bash(curl -s \"https://api.github.com/repos/cdump/radiacode/contents/src\")",
+      "Bash(curl -s \"https://api.github.com/repos/cdump/radiacode/contents/src/radiacode\")",
+      "Bash(curl -s \"https://api.github.com/repos/cdump/radiacode/contents/src/radiacode/transports\")",
+      "Bash(curl -s \"https://api.github.com/repos/cdump/radiacode/pulls/33/files\")",
+      "Bash(python3 -c \":*)"
     ]
   }
 }

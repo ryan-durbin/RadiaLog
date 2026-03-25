@@ -77,6 +77,7 @@ select:focus{border-color:#58a6ff}
         <label class="filter-label"><input type="checkbox" id="filter-WIFI" checked> WIFI</label>
         <label class="filter-label"><input type="checkbox" id="filter-UPLOAD" checked> UPLOAD</label>
         <label class="filter-label"><input type="checkbox" id="filter-BUFFER" checked> BUFFER</label>
+        <label class="filter-label"><input type="checkbox" id="filter-BLE" checked> BLE</label>
       </div>
       <select id="level-filter">
         <option value="DEBUG">DEBUG</option>
@@ -103,7 +104,7 @@ select:focus{border-color:#58a6ff}
   var btnClear = document.getElementById('btn-clear');
   var wsDot = document.getElementById('nav-ws');
 
-  var modules = ['USB','GPS','WIFI','UPLOAD','BUFFER'];
+  var modules = ['USB','GPS','WIFI','UPLOAD','BUFFER','BLE'];
   var levelOrder = {DEBUG:0, INFO:1, WARN:2, ERROR:3};
   var ws = null;
   var autoScroll = true;

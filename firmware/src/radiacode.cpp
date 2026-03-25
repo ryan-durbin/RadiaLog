@@ -350,8 +350,9 @@ std::vector<RadiaCodeReading> RadiaCode::parseDataBuf(const uint8_t* data,
 
             // count_rate: float (4 bytes LE)
             std::memcpy(&reading.count_rate, data + offset, 4);
-            // dose_rate: float (4 bytes LE)
+            // dose_rate: float (4 bytes LE) — raw value scaled by 10000 to get µSv/h
             std::memcpy(&reading.dose_rate, data + offset + 4, 4);
+            reading.dose_rate *= 10000.0f;
             // count_rate_err: uint16 LE
             reading.count_rate_err = static_cast<uint16_t>(data[offset + 8]) |
                                      (static_cast<uint16_t>(data[offset + 9]) << 8);
