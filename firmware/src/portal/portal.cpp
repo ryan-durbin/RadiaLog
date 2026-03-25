@@ -286,6 +286,17 @@ void StatusPortal::_registerRoutes() {
         xTaskCreatePinnedToCore(
             [](void*) {
                 NimBLEScan* scan = NimBLEDevice::getScan();
+                if (!scan) {
+                    _bleScanDone = true;
+                    _bleScanRunning = false;
+                    vTaskDelete(nullptr);
+                    return;
+                }
+
+                // Stop any in-progress scan first
+                scan->stop();
+                delay(100);
+
                 scan->setActiveScan(true);
                 scan->setInterval(100);
                 scan->setWindow(99);
@@ -310,7 +321,7 @@ void StatusPortal::_registerRoutes() {
                 _bleScanRunning = false;
                 vTaskDelete(nullptr);
             },
-            "ble_scan", 4096, nullptr, 1, nullptr, 0  // core 0
+            "ble_scan", 8192, nullptr, 1, nullptr, 0  // core 0
         );
 
         request->send(200, "application/json", "{\"status\":\"scanning\"}");

@@ -19,7 +19,8 @@
       "WebFetch(domain:docs.espressif.com)",
       "WebFetch(domain:protosupplies.com)",
       "Bash(find /home/ryandurbin/projects/RadiaLog -name *.md -type f)",
-      "Bash(find /home/ryandurbin/projects/RadiaLog -name usb_transport.py -o -name *protocol* -type f)"
+      "Bash(find /home/ryandurbin/projects/RadiaLog -name usb_transport.py -o -name *protocol* -type f)",
+      "Bash(git show:*)"
     ]
   }
 }
