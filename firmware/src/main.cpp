@@ -173,7 +173,11 @@ void setup() {
     // 13. TFT Display (T-Display S3 only)
 #ifdef HAS_DISPLAY
     display.begin();
-    debugWS.log(MOD_BUFFER, LVL_INFO, "[RadiaLog] TFT display initialized.");
+    display.setTimeoutSec(configMgr.getDisplayTimeoutSec());
+    display.setButtonWakeEnabled(configMgr.getButtonWakeEnabled());
+    debugWS.log(MOD_BUFFER, LVL_INFO, "[RadiaLog] TFT display initialized. Timeout: "
+        + String(configMgr.getDisplayTimeoutSec()) + "s, Button wake: "
+        + String(configMgr.getButtonWakeEnabled() ? "on" : "off"));
 #endif
 
     debugWS.log(MOD_USB, LVL_INFO, "[RadiaLog] Setup complete. Entering loop.");

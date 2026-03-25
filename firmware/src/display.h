@@ -48,6 +48,12 @@ public:
     /// True if the display is currently powered on.
     bool isOn() const { return _on; }
 
+    /// Set display timeout in seconds. 0 = always on (default).
+    void setTimeoutSec(uint16_t sec);
+
+    /// Enable/disable physical button for display wake (default: true).
+    void setButtonWakeEnabled(bool enabled);
+
 private:
     TFT_eSPI _tft;
     bool     _on;
@@ -55,7 +61,9 @@ private:
     bool     _lastBtnState;
     unsigned long _lastDebounce;
 
-    static constexpr unsigned long DISPLAY_TIMEOUT_MS = 10000;
+    uint16_t _timeoutSec;           // 0 = always on
+    bool     _buttonWakeEnabled;
+
     static constexpr unsigned long DEBOUNCE_MS = 50;
 
     void _wake();

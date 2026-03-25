@@ -34,7 +34,21 @@ Display::Display()
     , _wakeTime(0)
     , _lastBtnState(HIGH)
     , _lastDebounce(0)
+    , _timeoutSec(0)
+    , _buttonWakeEnabled(true)
 {
+}
+
+void Display::setTimeoutSec(uint16_t sec) {
+    _timeoutSec = sec;
+    // If switching to always-on and currently off, wake up
+    if (sec == 0 && !_on) {
+        _wake();
+    }
+}
+
+void Display::setButtonWakeEnabled(bool enabled) {
+    _buttonWakeEnabled = enabled;
 }
 
 void Display::begin() {
@@ -84,17 +98,19 @@ void Display::handleButton() {
     unsigned long now = millis();
     bool wakeTriggered = false;
 
-    // Check physical button (GPIO14)
-    bool reading = digitalRead(BUTTON_PIN);
-    if (reading != _lastBtnState) {
-        _lastDebounce = now;
-    }
-    if ((now - _lastDebounce) > DEBOUNCE_MS) {
-        if (reading == LOW && _lastBtnState == HIGH) {
-            wakeTriggered = true;
+    // Check physical button (GPIO14) — only if button wake is enabled
+    if (_buttonWakeEnabled) {
+        bool reading = digitalRead(BUTTON_PIN);
+        if (reading != _lastBtnState) {
+            _lastDebounce = now;
         }
+        if ((now - _lastDebounce) > DEBOUNCE_MS) {
+            if (reading == LOW && _lastBtnState == HIGH) {
+                wakeTriggered = true;
+            }
+        }
+        _lastBtnState = reading;
     }
-    _lastBtnState = reading;
 
     // Check touch interrupt
 #ifdef HAS_TOUCH
@@ -104,8 +120,8 @@ void Display::handleButton() {
     }
 #endif
 
-    // Toggle display on wake trigger
-    if (wakeTriggered) {
+    // Toggle display on wake trigger (only when timeout is active)
+    if (wakeTriggered && _timeoutSec > 0) {
         if (_on) {
             _sleep();
         } else {
@@ -113,9 +129,12 @@ void Display::handleButton() {
         }
     }
 
-    // Auto-off timeout
-    if (_on && (now - _wakeTime) > DISPLAY_TIMEOUT_MS) {
-        _sleep();
+    // Auto-off timeout (0 = always on, skip)
+    if (_timeoutSec > 0 && _on) {
+        unsigned long timeoutMs = static_cast<unsigned long>(_timeoutSec) * 1000UL;
+        if ((now - _wakeTime) > timeoutMs) {
+            _sleep();
+        }
     }
 }
 

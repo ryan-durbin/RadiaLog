@@ -46,6 +46,12 @@ public:
     String  getApPassword() const;
     void    setApPassword(const String& pass);
 
+    // --- Display ---
+    uint16_t getDisplayTimeoutSec() const;
+    void     setDisplayTimeoutSec(uint16_t sec);
+    bool     getButtonWakeEnabled() const;
+    void     setButtonWakeEnabled(bool enabled);
+
     // --- Geolocation ---
     String  getGoogleApiKey() const;
     void    setGoogleApiKey(const String& key);
@@ -70,6 +76,8 @@ private:
     String   _apPassword;
     String   _googleApiKey;
     std::vector<String> _bleDeviceMacs;
+    uint16_t _displayTimeoutSec;
+    bool     _buttonWakeEnabled;
 };
 
 #endif // CONFIG_MGR_H

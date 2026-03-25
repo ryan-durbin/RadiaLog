@@ -9,6 +9,16 @@
 #include <Update.h>
 #include <NimBLEDevice.h>
 
+// --- BLE scan state (shared between request handlers and scan task) ----------
+struct BleScanEntry {
+    String name;
+    String mac;
+    int    rssi;
+};
+static volatile bool _bleScanRunning = false;
+static volatile bool _bleScanDone    = false;
+static std::vector<BleScanEntry> _bleScanResults;
+
 // =============================================================================
 // RadiaLog Firmware - StatusPortal Implementation
 // Async web server: dashboard, debug console, settings, data, OTA, and API.
@@ -157,6 +167,10 @@ void StatusPortal::_registerRoutes() {
                     _cfg->setReadingIntervalMs(body["reading_interval_ms"].as<uint32_t>());
                 if (body["google_api_key"].is<const char*>())
                     _cfg->setGoogleApiKey(body["google_api_key"].as<String>());
+                if (body["display_timeout_sec"].is<int>())
+                    _cfg->setDisplayTimeoutSec(body["display_timeout_sec"].as<uint16_t>());
+                if (body["button_wake"].is<bool>())
+                    _cfg->setButtonWakeEnabled(body["button_wake"].as<bool>());
                 if (body["ble_devices"].is<JsonArray>()) {
                     std::vector<String> macs;
                     JsonArray bleArr = body["ble_devices"].as<JsonArray>();
@@ -248,39 +262,77 @@ void StatusPortal::_registerRoutes() {
         request->send(200, "application/json", "{\"success\":true,\"message\":\"Buffer cleared\"}");
     });
 
-    // --- BLE scan endpoint ---
+    // --- BLE scan endpoints (async to avoid watchdog reset) ---
+    // POST /api/ble/scan  — kick off a background scan
+    // GET  /api/ble/scan  — poll for results
 
     _server->on("/api/ble/scan", HTTP_POST, [](AsyncWebServerRequest* request) {
-        // Run a BLE scan for devices whose name starts with "RC-" (RadiaCode)
-        // NimBLE scan is synchronous and blocks for the scan duration.
+        if (_bleScanRunning) {
+            request->send(200, "application/json",
+                "{\"status\":\"scanning\"}");
+            return;
+        }
+
         if (!NimBLEDevice::getInitialized()) {
             NimBLEDevice::init("RadiaLog");
         }
 
-        NimBLEScan* scan = NimBLEDevice::getScan();
-        scan->setActiveScan(true);
-        scan->setInterval(100);
-        scan->setWindow(99);
+        _bleScanResults.clear();
+        _bleScanRunning = true;
+        _bleScanDone = false;
 
-        NimBLEScanResults results = scan->start(5, false);  // 5 second scan
+        // Launch scan in a one-shot FreeRTOS task so we don't block
+        // the async web server (which would trigger a watchdog reset).
+        xTaskCreatePinnedToCore(
+            [](void*) {
+                NimBLEScan* scan = NimBLEDevice::getScan();
+                scan->setActiveScan(true);
+                scan->setInterval(100);
+                scan->setWindow(99);
 
+                NimBLEScanResults results = scan->start(5, false);
+
+                _bleScanResults.clear();
+                for (int i = 0; i < results.getCount(); i++) {
+                    NimBLEAdvertisedDevice dev = results.getDevice(i);
+                    String name = dev.getName().c_str();
+                    if (name.startsWith("RC-")) {
+                        BleScanEntry entry;
+                        entry.name = name;
+                        entry.mac  = dev.getAddress().toString().c_str();
+                        entry.rssi = dev.getRSSI();
+                        _bleScanResults.push_back(entry);
+                    }
+                }
+                scan->clearResults();
+
+                _bleScanDone = true;
+                _bleScanRunning = false;
+                vTaskDelete(nullptr);
+            },
+            "ble_scan", 4096, nullptr, 1, nullptr, 0  // core 0
+        );
+
+        request->send(200, "application/json", "{\"status\":\"scanning\"}");
+    });
+
+    _server->on("/api/ble/scan", HTTP_GET, [](AsyncWebServerRequest* request) {
         JsonDocument doc;
-        JsonArray arr = doc["devices"].to<JsonArray>();
 
-        for (int i = 0; i < results.getCount(); i++) {
-            NimBLEAdvertisedDevice dev = results.getDevice(i);
-            String name = dev.getName().c_str();
-
-            // RadiaCode devices advertise as "RC-XXX" (e.g. "RC-101", "RC-102")
-            if (name.startsWith("RC-")) {
+        if (_bleScanRunning) {
+            doc["status"] = "scanning";
+        } else if (_bleScanDone) {
+            doc["status"] = "done";
+            JsonArray arr = doc["devices"].to<JsonArray>();
+            for (const auto& entry : _bleScanResults) {
                 JsonObject obj = arr.add<JsonObject>();
-                obj["name"] = name;
-                obj["mac"]  = dev.getAddress().toString().c_str();
-                obj["rssi"] = dev.getRSSI();
+                obj["name"] = entry.name;
+                obj["mac"]  = entry.mac;
+                obj["rssi"] = entry.rssi;
             }
+        } else {
+            doc["status"] = "idle";
         }
-
-        scan->clearResults();
 
         String out;
         serializeJson(doc, out);
@@ -374,6 +426,8 @@ void StatusPortal::_handleApiSettings(AsyncWebServerRequest* request) {
     doc["reading_interval_ms"] = _cfg->getReadingIntervalMs();
     doc["ap_password"]         = _cfg->getApPassword();
     doc["google_api_key"]      = _cfg->getGoogleApiKey();
+    doc["display_timeout_sec"] = _cfg->getDisplayTimeoutSec();
+    doc["button_wake"]         = _cfg->getButtonWakeEnabled();
 
     JsonArray bleArr = doc["ble_devices"].to<JsonArray>();
     for (int i = 0; i < _cfg->getBleDeviceCount(); i++) {

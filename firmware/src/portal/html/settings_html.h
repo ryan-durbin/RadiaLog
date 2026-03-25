@@ -102,6 +102,20 @@ input:focus{outline:none;border-color:#58a6ff}
   <span style="font-size:0.75rem;color:#8b949e">Used for WiFi-based location when GPS has no fix. Leave empty to disable.</span>
 </div>
 
+<p class="section-title">Display</p>
+<div class="card">
+  <label>Display Timeout (seconds)</label>
+  <input type="number" id="cfg-display-timeout" min="0" max="3600" step="1">
+  <span style="font-size:0.75rem;color:#8b949e">0 = always on (default). Set a value like 10 or 30 for auto-off after that many seconds.</span>
+  <div style="margin-top:0.5rem">
+    <label style="display:inline;cursor:pointer">
+      <input type="checkbox" id="cfg-button-wake" style="margin-right:0.4rem;vertical-align:middle">
+      Enable physical button to wake/sleep display
+    </label>
+    <div style="font-size:0.75rem;color:#8b949e;margin-top:0.25rem">Enable this if your T-Display S3 touch is broken or unavailable. Only applies when timeout > 0.</div>
+  </div>
+</div>
+
 <p class="section-title">Device</p>
 <div class="card">
   <label>Device Name</label>
@@ -223,6 +237,8 @@ function renderScanResults(devices){
   });
 }
 
+var scanPollTimer=null;
+
 function scanBle(){
   var btn=document.getElementById('ble-scan-btn');
   var stat=document.getElementById('ble-scan-status');
@@ -231,16 +247,37 @@ function scanBle(){
   document.getElementById('ble-scan-results').innerHTML='';
   fetch('/api/ble/scan',{method:'POST'})
     .then(function(r){return r.json();})
-    .then(function(d){
-      btn.disabled=false;btn.textContent='Scan for RadiaCode';
-      stat.textContent=d.devices.length+' device(s) found';
-      renderScanResults(d.devices);
-    })
+    .then(function(){pollScanResults();})
     .catch(function(){
       btn.disabled=false;btn.textContent='Scan for RadiaCode';
       stat.textContent='';
       toast('BLE scan failed',true);
     });
+}
+
+function pollScanResults(){
+  if(scanPollTimer)clearTimeout(scanPollTimer);
+  fetch('/api/ble/scan').then(function(r){return r.json();}).then(function(d){
+    if(d.status==='scanning'){
+      scanPollTimer=setTimeout(pollScanResults,1000);
+      return;
+    }
+    var btn=document.getElementById('ble-scan-btn');
+    var stat=document.getElementById('ble-scan-status');
+    btn.disabled=false;btn.textContent='Scan for RadiaCode';
+    if(d.status==='done'){
+      var devs=d.devices||[];
+      stat.textContent=devs.length+' device(s) found';
+      renderScanResults(devs);
+    } else {
+      stat.textContent='';
+    }
+  }).catch(function(){
+    var btn=document.getElementById('ble-scan-btn');
+    btn.disabled=false;btn.textContent='Scan for RadiaCode';
+    document.getElementById('ble-scan-status').textContent='';
+    toast('Failed to get scan results',true);
+  });
 }
 
 function loadSettings(){
@@ -256,6 +293,8 @@ function loadSettings(){
     document.getElementById('cfg-interval').value=d.reading_interval_ms||2000;
     document.getElementById('cfg-ap-pass').value=d.ap_password||'';
     document.getElementById('cfg-google-key').value=d.google_api_key||'';
+    document.getElementById('cfg-display-timeout').value=d.display_timeout_sec!=null?d.display_timeout_sec:0;
+    document.getElementById('cfg-button-wake').checked=d.button_wake!=null?d.button_wake:true;
   }).catch(function(){toast('Failed to load settings',true);});
 }
 
@@ -269,6 +308,8 @@ function saveSettings(){
     reading_interval_ms:parseInt(document.getElementById('cfg-interval').value)||2000,
     ap_password:document.getElementById('cfg-ap-pass').value,
     google_api_key:document.getElementById('cfg-google-key').value,
+    display_timeout_sec:parseInt(document.getElementById('cfg-display-timeout').value)||0,
+    button_wake:document.getElementById('cfg-button-wake').checked,
     ble_devices:bleDevices
   };
   fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})

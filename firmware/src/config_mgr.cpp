@@ -18,6 +18,8 @@ ConfigMgr::ConfigMgr()
     , _readingIntervalMs(2000)
     , _apPassword("")
     , _googleApiKey("")
+    , _displayTimeoutSec(0)
+    , _buttonWakeEnabled(true)
 {
 }
 
@@ -97,6 +99,15 @@ bool ConfigMgr::load() {
         }
     }
 
+    // Display settings
+    if (doc["display"].is<JsonObject>()) {
+        JsonObject disp = doc["display"].as<JsonObject>();
+        if (disp["timeout_sec"].is<uint16_t>())
+            _displayTimeoutSec = disp["timeout_sec"].as<uint16_t>();
+        if (disp["button_wake"].is<bool>())
+            _buttonWakeEnabled = disp["button_wake"].as<bool>();
+    }
+
     return true;
 }
 
@@ -135,6 +146,11 @@ bool ConfigMgr::save() {
     for (const auto& mac : _bleDeviceMacs) {
         bleArr.add(mac);
     }
+
+    // Display settings
+    JsonObject disp = doc["display"].to<JsonObject>();
+    disp["timeout_sec"] = _displayTimeoutSec;
+    disp["button_wake"] = _buttonWakeEnabled;
 
     File f = LittleFS.open(CONFIG_FILE, "w");
     if (!f) {
@@ -250,6 +266,22 @@ int ConfigMgr::getBleDeviceCount() const {
 String ConfigMgr::getBleDeviceMac(int i) const {
     if (i < 0 || i >= static_cast<int>(_bleDeviceMacs.size())) return "";
     return _bleDeviceMacs[i];
+}
+
+uint16_t ConfigMgr::getDisplayTimeoutSec() const {
+    return _displayTimeoutSec;
+}
+
+void ConfigMgr::setDisplayTimeoutSec(uint16_t sec) {
+    _displayTimeoutSec = sec;
+}
+
+bool ConfigMgr::getButtonWakeEnabled() const {
+    return _buttonWakeEnabled;
+}
+
+void ConfigMgr::setButtonWakeEnabled(bool enabled) {
+    _buttonWakeEnabled = enabled;
 }
 
 void ConfigMgr::setBleDevices(const std::vector<String>& macs) {
