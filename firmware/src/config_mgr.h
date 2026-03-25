@@ -3,6 +3,7 @@
 #define CONFIG_MGR_H
 
 #include <Arduino.h>
+#include <Preferences.h>
 #include <vector>
 
 // =============================================================================
@@ -60,6 +61,12 @@ public:
     int     getBleDeviceCount() const;
     String  getBleDeviceMac(int i) const;
     void    setBleDevices(const std::vector<String>& macs);
+
+    /// Save critical settings to NVS (survives firmware flashing).
+    bool saveToNVS();
+
+    /// Load critical settings from NVS. Returns true if NVS had data.
+    bool loadFromNVS();
 
     static constexpr int MAX_WIFI = 4;
     static constexpr int MAX_BLE_DEVICES = 4;

@@ -59,14 +59,15 @@ private:
     static constexpr unsigned long BACKOFF_INITIAL_MS = 1000UL;
     static constexpr unsigned long BACKOFF_MAX_MS     = 300000UL; // 5 minutes
 
-    // Upload batch size
-    static constexpr uint32_t MAX_BATCH_SIZE = 10000;
+    // Upload batch size — keep small to avoid heap exhaustion.
+    // Each Reading is ~48 bytes; 50 readings ≈ 2.4KB heap + ~10KB JSON.
+    static constexpr uint32_t MAX_BATCH_SIZE = 50;
 
     // Task timing
     static constexpr unsigned long UPLOAD_CYCLE_MS = 30000UL; // 30s between cycles
 
-    // Task stack and priority
-    static constexpr uint32_t TASK_STACK_SIZE = 8192;
+    // Task stack and priority — needs room for HTTP + JSON serialization
+    static constexpr uint32_t TASK_STACK_SIZE = 12288;
     static constexpr UBaseType_t TASK_PRIORITY = 1;
 
     /// FreeRTOS task entry point (static).

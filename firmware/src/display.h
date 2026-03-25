@@ -55,7 +55,8 @@ public:
     void setButtonWakeEnabled(bool enabled);
 
 private:
-    TFT_eSPI _tft;
+    TFT_eSPI    _tft;
+    TFT_eSprite _sprite;    // Persistent off-screen buffer (allocated once in begin)
     bool     _on;
     unsigned long _wakeTime;
     bool     _lastBtnState;

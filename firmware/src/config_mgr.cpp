@@ -5,9 +5,11 @@
 // =============================================================================
 // RadiaLog Firmware - ConfigMgr Implementation
 // Reads/writes /config.json on LittleFS using ArduinoJson.
+// Critical settings are also persisted to NVS so they survive flashing.
 // =============================================================================
 
-static const char* CONFIG_FILE = "/config.json";
+static const char* CONFIG_FILE   = "/config.json";
+static const char* NVS_NAMESPACE = "radialog";
 
 ConfigMgr::ConfigMgr()
     : _wifiCount(0)
@@ -24,12 +26,18 @@ ConfigMgr::ConfigMgr()
 }
 
 bool ConfigMgr::load() {
+    // Try NVS first — these survive firmware flashing
+    bool nvsLoaded = loadFromNVS();
+
     if (!LittleFS.begin(true)) {
-        return false;
+        return nvsLoaded;
     }
 
+    // If NVS already had our settings, we're done — NVS is authoritative.
+    // Still load config.json for non-NVS fields (BLE devices, button_wake).
+    // If NVS was empty, load everything from config.json and seed NVS.
+
     if (!LittleFS.exists(CONFIG_FILE)) {
-        // No config file — keep defaults
         return true;
     }
 
@@ -43,49 +51,10 @@ bool ConfigMgr::load() {
     f.close();
 
     if (err) {
-        // Invalid JSON — keep defaults
         return true;
     }
 
-    // WiFi networks
-    _wifiCount = 0;
-    if (doc["wifi"].is<JsonArray>()) {
-        JsonArray wifiArr = doc["wifi"].as<JsonArray>();
-        for (JsonObject net : wifiArr) {
-            if (_wifiCount >= MAX_WIFI) break;
-            _wifiSSID[_wifiCount] = net["ssid"].as<String>();
-            _wifiPass[_wifiCount] = net["password"].as<String>();
-            _wifiCount++;
-        }
-    }
-
-    // RadiaMaps settings
-    if (doc["radiamaps"].is<JsonObject>()) {
-        JsonObject rm = doc["radiamaps"].as<JsonObject>();
-        if (rm["token"].is<const char*>())    _token     = rm["token"].as<String>();
-        if (rm["url"].is<const char*>())       _uploadUrl = rm["url"].as<String>();
-        if (rm["device_id"].is<const char*>()) _deviceId  = rm["device_id"].as<String>();
-    }
-
-    // Device settings
-    if (doc["device"].is<JsonObject>()) {
-        JsonObject dev = doc["device"].as<JsonObject>();
-        if (dev["name"].is<const char*>())              _deviceName       = dev["name"].as<String>();
-        if (dev["reading_interval_ms"].is<uint32_t>())  _readingIntervalMs = dev["reading_interval_ms"].as<uint32_t>();
-    }
-
-    // AP settings
-    if (doc["ap"].is<JsonObject>()) {
-        JsonObject ap = doc["ap"].as<JsonObject>();
-        if (ap["password"].is<const char*>()) _apPassword = ap["password"].as<String>();
-    }
-
-    // Geolocation settings
-    if (doc["geolocation"].is<JsonObject>()) {
-        JsonObject geo = doc["geolocation"].as<JsonObject>();
-        if (geo["google_api_key"].is<const char*>())
-            _googleApiKey = geo["google_api_key"].as<String>();
-    }
+    // --- Fields always loaded from config.json (not in NVS) ---
 
     // BLE RadiaCode devices
     _bleDeviceMacs.clear();
@@ -99,19 +68,73 @@ bool ConfigMgr::load() {
         }
     }
 
-    // Display settings
+    // Display button_wake (not critical enough for NVS)
     if (doc["display"].is<JsonObject>()) {
         JsonObject disp = doc["display"].as<JsonObject>();
-        if (disp["timeout_sec"].is<uint16_t>())
-            _displayTimeoutSec = disp["timeout_sec"].as<uint16_t>();
         if (disp["button_wake"].is<bool>())
             _buttonWakeEnabled = disp["button_wake"].as<bool>();
+    }
+
+    // --- NVS-protected fields: only load from config.json if NVS was empty ---
+    if (!nvsLoaded) {
+        // WiFi networks
+        _wifiCount = 0;
+        if (doc["wifi"].is<JsonArray>()) {
+            JsonArray wifiArr = doc["wifi"].as<JsonArray>();
+            for (JsonObject net : wifiArr) {
+                if (_wifiCount >= MAX_WIFI) break;
+                _wifiSSID[_wifiCount] = net["ssid"].as<String>();
+                _wifiPass[_wifiCount] = net["password"].as<String>();
+                _wifiCount++;
+            }
+        }
+
+        // RadiaMaps settings
+        if (doc["radiamaps"].is<JsonObject>()) {
+            JsonObject rm = doc["radiamaps"].as<JsonObject>();
+            if (rm["token"].is<const char*>())    _token     = rm["token"].as<String>();
+            if (rm["url"].is<const char*>())       _uploadUrl = rm["url"].as<String>();
+            if (rm["device_id"].is<const char*>()) _deviceId  = rm["device_id"].as<String>();
+        }
+
+        // Device settings
+        if (doc["device"].is<JsonObject>()) {
+            JsonObject dev = doc["device"].as<JsonObject>();
+            if (dev["name"].is<const char*>())              _deviceName       = dev["name"].as<String>();
+            if (dev["reading_interval_ms"].is<uint32_t>())  _readingIntervalMs = dev["reading_interval_ms"].as<uint32_t>();
+        }
+
+        // AP settings
+        if (doc["ap"].is<JsonObject>()) {
+            JsonObject ap = doc["ap"].as<JsonObject>();
+            if (ap["password"].is<const char*>()) _apPassword = ap["password"].as<String>();
+        }
+
+        // Geolocation settings
+        if (doc["geolocation"].is<JsonObject>()) {
+            JsonObject geo = doc["geolocation"].as<JsonObject>();
+            if (geo["google_api_key"].is<const char*>())
+                _googleApiKey = geo["google_api_key"].as<String>();
+        }
+
+        // Display timeout
+        if (doc["display"].is<JsonObject>()) {
+            JsonObject disp = doc["display"].as<JsonObject>();
+            if (disp["timeout_sec"].is<uint16_t>())
+                _displayTimeoutSec = disp["timeout_sec"].as<uint16_t>();
+        }
+
+        // Seed NVS with the config.json values so they survive future flashes
+        saveToNVS();
     }
 
     return true;
 }
 
 bool ConfigMgr::save() {
+    // Always persist critical settings to NVS
+    saveToNVS();
+
     JsonDocument doc;
 
     // WiFi networks
@@ -160,6 +183,87 @@ bool ConfigMgr::save() {
     size_t written = serializeJson(doc, f);
     f.close();
     return written > 0;
+}
+
+// --- NVS persistence (survives firmware flashing) ---------------------------
+
+bool ConfigMgr::saveToNVS() {
+    Preferences prefs;
+    if (!prefs.begin(NVS_NAMESPACE, false)) {  // read-write
+        return false;
+    }
+
+    // WiFi networks — store count + indexed keys
+    prefs.putInt("wifi_count", _wifiCount);
+    for (int i = 0; i < _wifiCount; i++) {
+        prefs.putString(("wssid" + String(i)).c_str(), _wifiSSID[i]);
+        prefs.putString(("wpass" + String(i)).c_str(), _wifiPass[i]);
+    }
+
+    // RadiaMaps
+    prefs.putString("token", _token);
+    prefs.putString("upload_url", _uploadUrl);
+    prefs.putString("device_id", _deviceId);
+
+    // Device
+    prefs.putString("dev_name", _deviceName);
+    prefs.putUInt("interval_ms", _readingIntervalMs);
+
+    // AP
+    prefs.putString("ap_pass", _apPassword);
+
+    // Geolocation
+    prefs.putString("google_key", _googleApiKey);
+
+    // Display
+    prefs.putUShort("disp_timeout", _displayTimeoutSec);
+
+    // Mark NVS as seeded
+    prefs.putBool("seeded", true);
+
+    prefs.end();
+    return true;
+}
+
+bool ConfigMgr::loadFromNVS() {
+    Preferences prefs;
+    if (!prefs.begin(NVS_NAMESPACE, true)) {  // read-only
+        return false;
+    }
+
+    if (!prefs.getBool("seeded", false)) {
+        prefs.end();
+        return false;  // NVS has never been written — fall back to config.json
+    }
+
+    // WiFi networks
+    _wifiCount = prefs.getInt("wifi_count", 0);
+    if (_wifiCount > MAX_WIFI) _wifiCount = MAX_WIFI;
+    for (int i = 0; i < _wifiCount; i++) {
+        _wifiSSID[i] = prefs.getString(("wssid" + String(i)).c_str(), "");
+        _wifiPass[i] = prefs.getString(("wpass" + String(i)).c_str(), "");
+    }
+
+    // RadiaMaps
+    _token     = prefs.getString("token", _token);
+    _uploadUrl = prefs.getString("upload_url", _uploadUrl);
+    _deviceId  = prefs.getString("device_id", _deviceId);
+
+    // Device
+    _deviceName       = prefs.getString("dev_name", _deviceName);
+    _readingIntervalMs = prefs.getUInt("interval_ms", _readingIntervalMs);
+
+    // AP
+    _apPassword = prefs.getString("ap_pass", _apPassword);
+
+    // Geolocation
+    _googleApiKey = prefs.getString("google_key", _googleApiKey);
+
+    // Display
+    _displayTimeoutSec = prefs.getUShort("disp_timeout", _displayTimeoutSec);
+
+    prefs.end();
+    return true;
 }
 
 // --- Getters ----------------------------------------------------------------

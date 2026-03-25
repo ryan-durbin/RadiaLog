@@ -30,6 +30,7 @@ void IRAM_ATTR Display::_touchISR() {
 
 Display::Display()
     : _tft(TFT_eSPI())
+    , _sprite(&_tft)
     , _on(false)
     , _wakeTime(0)
     , _lastBtnState(HIGH)
@@ -79,6 +80,9 @@ void Display::begin() {
     pinMode(TOUCH_INT_PIN, INPUT_PULLUP);
     attachInterrupt(digitalPinToInterrupt(TOUCH_INT_PIN), _touchISR, FALLING);
 #endif
+
+    // Allocate off-screen sprite once (170x320x2 = ~109KB)
+    _sprite.createSprite(170, 320);
 
     // Show boot message and start with display on
     _tft.setTextColor(COL_TITLE, COL_BG);
@@ -171,9 +175,8 @@ static uint16_t doseColor(float doseRate) {
 void Display::draw(const DisplayStatus& s) {
     if (!_on) return;
 
-    // Draw into an off-screen sprite, then push once — no flicker
-    TFT_eSprite fb(&_tft);
-    fb.createSprite(170, 320);
+    // Draw into the persistent off-screen sprite, then push once — no flicker
+    TFT_eSprite& fb = _sprite;
     fb.fillSprite(COL_BG);
     fb.setTextDatum(TL_DATUM);
 
@@ -329,7 +332,6 @@ void Display::draw(const DisplayStatus& s) {
 
     // Push the whole frame at once
     fb.pushSprite(0, 0);
-    fb.deleteSprite();
 }
 
 #endif // HAS_DISPLAY
