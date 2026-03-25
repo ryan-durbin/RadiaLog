@@ -171,71 +171,73 @@ static uint16_t doseColor(float doseRate) {
 void Display::draw(const DisplayStatus& s) {
     if (!_on) return;
 
-    _tft.fillScreen(COL_BG);
+    // Draw into an off-screen sprite, then push once — no flicker
+    TFT_eSprite fb(&_tft);
+    fb.createSprite(170, 320);
+    fb.fillSprite(COL_BG);
+    fb.setTextDatum(TL_DATUM);
 
     // =====================================================================
     // STATUS BAR (y: 0–28)
-    // Compact: RC / WiFi / GPS status dots with labels, battery on right
     // =====================================================================
     int sx = 8;
     int sy = 8;
 
     // RadiaCode indicator
-    _tft.fillCircle(sx + 4, sy + 4, 4, s.usbConnected ? COL_GREEN : COL_RED);
-    _tft.setTextColor(COL_LABEL, COL_BG);
-    _tft.setTextSize(1);
-    _tft.setTextDatum(TL_DATUM);
-    _tft.drawString("RC", sx + 12, sy);
+    fb.fillCircle(sx + 4, sy + 4, 4, s.usbConnected ? COL_GREEN : COL_RED);
+    fb.setTextColor(COL_LABEL, COL_BG);
+    fb.setTextSize(1);
+    fb.drawString("RC", sx + 12, sy);
 
     // WiFi indicator
     sx += 38;
-    _tft.fillCircle(sx + 4, sy + 4, 4, s.wifiConnected ? COL_GREEN : COL_RED);
-    _tft.setTextColor(COL_LABEL, COL_BG);
-    _tft.drawString("Wi", sx + 12, sy);
+    fb.fillCircle(sx + 4, sy + 4, 4, s.wifiConnected ? COL_GREEN : COL_RED);
+    fb.setTextColor(COL_LABEL, COL_BG);
+    fb.drawString("Wi", sx + 12, sy);
 
     // GPS indicator
     sx += 34;
-    _tft.fillCircle(sx + 4, sy + 4, 4, s.gpsFix ? COL_GREEN : COL_YELLOW);
-    _tft.setTextColor(COL_LABEL, COL_BG);
+    fb.fillCircle(sx + 4, sy + 4, 4, s.gpsFix ? COL_GREEN : COL_YELLOW);
+    fb.setTextColor(COL_LABEL, COL_BG);
     if (s.gpsFix) {
-        _tft.drawString(String(s.gpsSats), sx + 12, sy);
+        fb.drawString(String(s.gpsSats), sx + 12, sy);
     } else {
-        _tft.drawString("--", sx + 12, sy);
+        fb.drawString("--", sx + 12, sy);
     }
 
-    // Battery (right-aligned)
+    // Battery (right side)
     if (s.batteryVoltage > 2.0f) {
         uint16_t batCol = s.batteryPercent > 20 ? COL_GREEN
                         : s.batteryPercent > 5  ? COL_YELLOW : COL_RED;
         char batBuf[8];
         snprintf(batBuf, sizeof(batBuf), "%d%%", s.batteryPercent);
-        _tft.setTextColor(batCol, COL_BG);
-        _tft.setTextDatum(TR_DATUM);
-        _tft.drawString(batBuf, 164, sy);
+        fb.setTextColor(batCol, COL_BG);
+        fb.setTextDatum(TR_DATUM);
+        fb.drawString(batBuf, 164, sy);
+        fb.setTextDatum(TL_DATUM);
 
         // Tiny battery bar
         int barX = 130, barY = sy + 10, barW = 34, barH = 5;
-        _tft.drawRect(barX, barY, barW, barH, COL_DIM);
+        fb.drawRect(barX, barY, barW, barH, COL_DIM);
         int fillW = (s.batteryPercent * (barW - 2)) / 100;
         if (fillW > 0) {
-            _tft.fillRect(barX + 1, barY + 1, fillW, barH - 2, batCol);
+            fb.fillRect(barX + 1, barY + 1, fillW, barH - 2, batCol);
         }
     }
 
-    // Thin separator
-    _tft.drawFastHLine(8, 26, 154, COL_LINE);
+    fb.drawFastHLine(8, 26, 154, COL_LINE);
 
     // =====================================================================
-    // DOSE RATE — hero section (y: 32–160)
+    // DOSE RATE — hero section (y: 32–130)
     // =====================================================================
-    _tft.setTextDatum(TC_DATUM);  // Top-center
 
-    // Label
-    _tft.setTextColor(COL_LABEL, COL_BG);
-    _tft.setTextSize(2);
-    _tft.drawString("DOSE RATE", 85, 34);
+    // Label — centered manually
+    fb.setTextColor(COL_LABEL, COL_BG);
+    fb.setTextSize(2);
+    int labelW = fb.textWidth("DOSE RATE");
+    fb.drawString("DOSE RATE", (170 - labelW) / 2, 34);
 
-    // Big number — color-coded by severity
+    // Big number — color-coded, size 4 (24x32 per char = fits 7 chars in 170px)
     uint16_t dCol = doseColor(s.doseRate);
     char doseBuf[16];
     if (s.doseRate < 10.0f) {
@@ -245,81 +247,89 @@ void Display::draw(const DisplayStatus& s) {
     } else {
         snprintf(doseBuf, sizeof(doseBuf), "%.1f", s.doseRate);
     }
-    _tft.setTextColor(dCol, COL_BG);
-    _tft.setTextSize(5);
-    _tft.drawString(doseBuf, 85, 62);
+    fb.setTextColor(dCol, COL_BG);
+    fb.setTextSize(4);
+    int doseW = fb.textWidth(doseBuf);
+    fb.drawString(doseBuf, (170 - doseW) / 2, 58);
 
     // Unit
-    _tft.setTextColor(COL_DIM, COL_BG);
-    _tft.setTextSize(2);
-    _tft.drawString("uSv/h", 85, 112);
+    fb.setTextColor(COL_DIM, COL_BG);
+    fb.setTextSize(2);
+    int unitW = fb.textWidth("uSv/h");
+    fb.drawString("uSv/h", (170 - unitW) / 2, 98);
 
     // =====================================================================
-    // COUNT RATE (y: 140–170)
+    // COUNT RATE (y: 124–148)
     // =====================================================================
-    _tft.setTextColor(COL_LABEL, COL_BG);
-    _tft.setTextSize(2);
-    _tft.setTextDatum(TL_DATUM);
-    _tft.drawString("CPS", 8, 142);
+    fb.setTextColor(COL_LABEL, COL_BG);
+    fb.setTextSize(2);
+    fb.drawString("CPS", 8, 128);
 
     char cpsBuf[16];
     snprintf(cpsBuf, sizeof(cpsBuf), "%.1f", s.countRate);
-    _tft.setTextColor(COL_VALUE, COL_BG);
-    _tft.setTextDatum(TR_DATUM);
-    _tft.drawString(cpsBuf, 164, 142);
+    fb.setTextColor(COL_VALUE, COL_BG);
+    fb.setTextDatum(TR_DATUM);
+    fb.drawString(cpsBuf, 164, 128);
+    fb.setTextDatum(TL_DATUM);
 
-    _tft.drawFastHLine(8, 164, 154, COL_LINE);
+    fb.drawFastHLine(8, 150, 154, COL_LINE);
 
     // =====================================================================
-    // INFO ROWS (y: 172–290) — size 2 for readability
+    // INFO ROWS (y: 158–250) — size 2 for readability
     // =====================================================================
-    _tft.setTextSize(2);
-    int iy = 174;
+    fb.setTextSize(2);
+    int iy = 158;
     const int rowH = 24;
 
     // Readings stored
-    _tft.setTextDatum(TL_DATUM);
-    _tft.setTextColor(COL_LABEL, COL_BG);
-    _tft.drawString("Stored", 8, iy);
-    _tft.setTextDatum(TR_DATUM);
-    _tft.setTextColor(COL_VALUE, COL_BG);
-    _tft.drawString(String(s.totalReadings), 164, iy);
+    fb.setTextColor(COL_LABEL, COL_BG);
+    fb.drawString("Stored", 8, iy);
+    fb.setTextColor(COL_VALUE, COL_BG);
+    fb.setTextDatum(TR_DATUM);
+    fb.drawString(String(s.totalReadings), 164, iy);
+    fb.setTextDatum(TL_DATUM);
     iy += rowH;
 
     // Pending upload
-    _tft.setTextDatum(TL_DATUM);
-    _tft.setTextColor(COL_LABEL, COL_BG);
-    _tft.drawString("Pending", 8, iy);
-    _tft.setTextDatum(TR_DATUM);
-    _tft.setTextColor(s.pendingReadings > 0 ? COL_YELLOW : COL_GREEN, COL_BG);
-    _tft.drawString(String(s.pendingReadings), 164, iy);
+    fb.setTextColor(COL_LABEL, COL_BG);
+    fb.drawString("Pending", 8, iy);
+    fb.setTextColor(s.pendingReadings > 0 ? COL_YELLOW : COL_GREEN, COL_BG);
+    fb.setTextDatum(TR_DATUM);
+    fb.drawString(String(s.pendingReadings), 164, iy);
+    fb.setTextDatum(TL_DATUM);
     iy += rowH;
 
     // Last upload
-    _tft.setTextDatum(TL_DATUM);
-    _tft.setTextColor(COL_LABEL, COL_BG);
-    _tft.drawString("Upload", 8, iy);
-    _tft.setTextDatum(TR_DATUM);
-    _tft.setTextColor(COL_VALUE, COL_BG);
-    _tft.drawString(s.lastUpload, 164, iy);
+    fb.setTextColor(COL_LABEL, COL_BG);
+    fb.drawString("Upload", 8, iy);
+    fb.setTextColor(COL_VALUE, COL_BG);
+    fb.setTextDatum(TR_DATUM);
+    fb.drawString(s.lastUpload, 164, iy);
+    fb.setTextDatum(TL_DATUM);
     iy += rowH;
 
-    _tft.drawFastHLine(8, iy + 2, 154, COL_LINE);
+    fb.drawFastHLine(8, iy + 2, 154, COL_LINE);
 
     // =====================================================================
-    // WIFI INFO (bottom, y: ~280)
+    // WIFI INFO (bottom)
     // =====================================================================
     iy += 10;
-    _tft.setTextSize(1);
-    _tft.setTextDatum(TC_DATUM);
+    fb.setTextSize(1);
     if (s.wifiConnected && s.staIP.length() > 0) {
-        _tft.setTextColor(COL_DIM, COL_BG);
-        _tft.drawString(s.wifiSSID, 85, iy);
-        _tft.drawString(s.staIP, 85, iy + 12);
+        fb.setTextColor(COL_DIM, COL_BG);
+        int ssidW = fb.textWidth(s.wifiSSID);
+        fb.drawString(s.wifiSSID, (170 - ssidW) / 2, iy);
+        int ipW = fb.textWidth(s.staIP);
+        fb.drawString(s.staIP, (170 - ipW) / 2, iy + 12);
     } else {
-        _tft.setTextColor(COL_DIM, COL_BG);
-        _tft.drawString("WiFi not connected", 85, iy);
+        fb.setTextColor(COL_DIM, COL_BG);
+        int nwW = fb.textWidth("WiFi not connected");
+        fb.drawString("WiFi not connected", (170 - nwW) / 2, iy);
     }
+
+    // Push the whole frame at once
+    fb.pushSprite(0, 0);
+    fb.deleteSprite();
 }
 
 #endif // HAS_DISPLAY
