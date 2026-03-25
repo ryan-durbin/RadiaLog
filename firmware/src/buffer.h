@@ -93,6 +93,7 @@ private:
     uint32_t _lifetimeLogged;    ///< Total readings ever appended
     uint32_t _lifetimeUploaded;  ///< Total readings ever uploaded
     uint32_t _uploadedInBuffer;  ///< Readings in buffer already uploaded
+    void*    _mutex;             ///< SemaphoreHandle_t (FreeRTOS mutex) for thread-safe file I/O
 
     /// Persist stats counters to /readings_idx.bin (write-through).
     bool _saveIndex();

@@ -1,5 +1,7 @@
 #include "buffer.h"
 #include <LittleFS.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
 
 // =============================================================================
 // RadiaLog Firmware - ReadingBuffer Implementation
@@ -22,6 +24,7 @@ ReadingBuffer::ReadingBuffer()
     , _lifetimeLogged(0)
     , _lifetimeUploaded(0)
     , _uploadedInBuffer(0)
+    , _mutex(nullptr)
 {
 }
 
@@ -91,6 +94,10 @@ bool ReadingBuffer::begin() {
         }
     }
 
+    // Create the FreeRTOS mutex for thread-safe file I/O.
+    _mutex = xSemaphoreCreateMutex();
+    assert(_mutex != nullptr);
+
     // Write-through: persist the (possibly freshly initialized) index.
     return _saveIndex();
 }
@@ -120,8 +127,11 @@ BufferStats ReadingBuffer::getStats() const {
 // =============================================================================
 
 bool ReadingBuffer::appendReading(const Reading& r) {
+    xSemaphoreTake((SemaphoreHandle_t)_mutex, portMAX_DELAY);
+
     File f = LittleFS.open(READINGS_FILE, "a");
     if (!f) {
+        xSemaphoreGive((SemaphoreHandle_t)_mutex);
         return false;
     }
 
@@ -156,25 +166,30 @@ bool ReadingBuffer::appendReading(const Reading& r) {
     size_t written = f.write(record, READING_BINARY_SIZE);
     f.close();
     if (written != READING_BINARY_SIZE) {
+        xSemaphoreGive((SemaphoreHandle_t)_mutex);
         return false;
     }
 
     // Append a status byte (0 = pending) to status file.
     File sf = LittleFS.open(STATUS_FILE, "a");
     if (!sf) {
+        xSemaphoreGive((SemaphoreHandle_t)_mutex);
         return false;
     }
     uint8_t pending = 0;
     size_t sw = sf.write(&pending, 1);
     sf.close();
     if (sw != 1) {
+        xSemaphoreGive((SemaphoreHandle_t)_mutex);
         return false;
     }
 
     _depth++;
     _lifetimeLogged++;
 
-    return _saveIndex();
+    bool ok = _saveIndex();
+    xSemaphoreGive((SemaphoreHandle_t)_mutex);
+    return ok;
 }
 
 // =============================================================================
@@ -223,13 +238,25 @@ static void _deserializeReading(const uint8_t* record, Reading& r) {
 // =============================================================================
 
 uint32_t ReadingBuffer::getUnuploaded(Reading* buf, uint32_t count) {
-    if (_depth == 0 || count == 0) return 0;
+    xSemaphoreTake((SemaphoreHandle_t)_mutex, portMAX_DELAY);
+
+    if (_depth == 0 || count == 0) {
+        xSemaphoreGive((SemaphoreHandle_t)_mutex);
+        return 0;
+    }
 
     File sf = LittleFS.open(STATUS_FILE, "r");
-    if (!sf) return 0;
+    if (!sf) {
+        xSemaphoreGive((SemaphoreHandle_t)_mutex);
+        return 0;
+    }
 
     File rf = LittleFS.open(READINGS_FILE, "r");
-    if (!rf) { sf.close(); return 0; }
+    if (!rf) {
+        sf.close();
+        xSemaphoreGive((SemaphoreHandle_t)_mutex);
+        return 0;
+    }
 
     uint32_t found = 0;
     uint32_t index = 0;
@@ -257,6 +284,7 @@ uint32_t ReadingBuffer::getUnuploaded(Reading* buf, uint32_t count) {
 
     sf.close();
     rf.close();
+    xSemaphoreGive((SemaphoreHandle_t)_mutex);
     return found;
 }
 
@@ -265,17 +293,33 @@ uint32_t ReadingBuffer::getUnuploaded(Reading* buf, uint32_t count) {
 // =============================================================================
 
 void ReadingBuffer::markUploaded(const uint32_t* ids, uint32_t count) {
-    if (count == 0 || _depth == 0) return;
+    xSemaphoreTake((SemaphoreHandle_t)_mutex, portMAX_DELAY);
+
+    if (count == 0 || _depth == 0) {
+        xSemaphoreGive((SemaphoreHandle_t)_mutex);
+        return;
+    }
 
     // Read entire status file into memory
     File sf = LittleFS.open(STATUS_FILE, "r");
-    if (!sf) return;
+    if (!sf) {
+        xSemaphoreGive((SemaphoreHandle_t)_mutex);
+        return;
+    }
 
     size_t statusSize = sf.size();
-    if (statusSize == 0) { sf.close(); return; }
+    if (statusSize == 0) {
+        sf.close();
+        xSemaphoreGive((SemaphoreHandle_t)_mutex);
+        return;
+    }
 
     uint8_t* statusBuf = new (std::nothrow) uint8_t[statusSize];
-    if (statusBuf == nullptr) { sf.close(); return; }
+    if (statusBuf == nullptr) {
+        sf.close();
+        xSemaphoreGive((SemaphoreHandle_t)_mutex);
+        return;
+    }
 
     sf.read(statusBuf, statusSize);
     sf.close();
@@ -304,6 +348,7 @@ void ReadingBuffer::markUploaded(const uint32_t* ids, uint32_t count) {
     }
 
     delete[] statusBuf;
+    xSemaphoreGive((SemaphoreHandle_t)_mutex);
 }
 
 // =============================================================================
@@ -311,14 +356,26 @@ void ReadingBuffer::markUploaded(const uint32_t* ids, uint32_t count) {
 // =============================================================================
 
 void ReadingBuffer::pruneUploaded() {
-    if (_depth < PRUNE_THRESHOLD) return;
+    xSemaphoreTake((SemaphoreHandle_t)_mutex, portMAX_DELAY);
+
+    if (_depth < PRUNE_THRESHOLD) {
+        xSemaphoreGive((SemaphoreHandle_t)_mutex);
+        return;
+    }
 
     // Read status file to find contiguous uploaded block at the start
     File sf = LittleFS.open(STATUS_FILE, "r");
-    if (!sf) return;
+    if (!sf) {
+        xSemaphoreGive((SemaphoreHandle_t)_mutex);
+        return;
+    }
 
     size_t statusSize = sf.size();
-    if (statusSize == 0) { sf.close(); return; }
+    if (statusSize == 0) {
+        sf.close();
+        xSemaphoreGive((SemaphoreHandle_t)_mutex);
+        return;
+    }
 
     // Count contiguous uploaded readings from the beginning
     uint32_t pruneCount = 0;
@@ -330,7 +387,10 @@ void ReadingBuffer::pruneUploaded() {
     }
     sf.close();
 
-    if (pruneCount == 0) return;
+    if (pruneCount == 0) {
+        xSemaphoreGive((SemaphoreHandle_t)_mutex);
+        return;
+    }
 
     // --- Compact readings.bin: copy remaining records to temp file ---
     size_t skipBytes   = static_cast<size_t>(pruneCount) * READING_BINARY_SIZE;
@@ -339,7 +399,7 @@ void ReadingBuffer::pruneUploaded() {
     {
         File src = LittleFS.open(READINGS_FILE, "r");
         File dst = LittleFS.open("/readings_tmp.bin", "w");
-        if (!src || !dst) { src.close(); dst.close(); return; }
+        if (!src || !dst) { src.close(); dst.close(); xSemaphoreGive((SemaphoreHandle_t)_mutex); return; }
 
         src.seek(skipBytes);
         uint8_t chunk[512];
@@ -359,7 +419,7 @@ void ReadingBuffer::pruneUploaded() {
     {
         File src = LittleFS.open(STATUS_FILE, "r");
         File dst = LittleFS.open("/status_tmp.bin", "w");
-        if (!src || !dst) { src.close(); dst.close(); return; }
+        if (!src || !dst) { src.close(); dst.close(); xSemaphoreGive((SemaphoreHandle_t)_mutex); return; }
 
         src.seek(pruneCount);
         uint8_t chunk[512];
@@ -385,4 +445,6 @@ void ReadingBuffer::pruneUploaded() {
     _depth -= pruneCount;
     _uploadedInBuffer -= pruneCount;
     _saveIndex();
+
+    xSemaphoreGive((SemaphoreHandle_t)_mutex);
 }
