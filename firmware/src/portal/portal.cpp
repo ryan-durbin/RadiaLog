@@ -7,6 +7,7 @@
 #include <ArduinoJson.h>
 #include <LittleFS.h>
 #include <Update.h>
+#include <NimBLEDevice.h>
 
 // =============================================================================
 // RadiaLog Firmware - StatusPortal Implementation
@@ -245,6 +246,45 @@ void StatusPortal::_registerRoutes() {
         LittleFS.remove("/readings_idx.bin");
         _buf->begin();
         request->send(200, "application/json", "{\"success\":true,\"message\":\"Buffer cleared\"}");
+    });
+
+    // --- BLE scan endpoint ---
+
+    _server->on("/api/ble/scan", HTTP_POST, [](AsyncWebServerRequest* request) {
+        // Run a BLE scan for devices whose name starts with "RC-" (RadiaCode)
+        // NimBLE scan is synchronous and blocks for the scan duration.
+        if (!NimBLEDevice::getInitialized()) {
+            NimBLEDevice::init("RadiaLog");
+        }
+
+        NimBLEScan* scan = NimBLEDevice::getScan();
+        scan->setActiveScan(true);
+        scan->setInterval(100);
+        scan->setWindow(99);
+
+        NimBLEScanResults results = scan->start(5, false);  // 5 second scan
+
+        JsonDocument doc;
+        JsonArray arr = doc["devices"].to<JsonArray>();
+
+        for (int i = 0; i < results.getCount(); i++) {
+            NimBLEAdvertisedDevice dev = results.getDevice(i);
+            String name = dev.getName().c_str();
+
+            // RadiaCode devices advertise as "RC-XXX" (e.g. "RC-101", "RC-102")
+            if (name.startsWith("RC-")) {
+                JsonObject obj = arr.add<JsonObject>();
+                obj["name"] = name;
+                obj["mac"]  = dev.getAddress().toString().c_str();
+                obj["rssi"] = dev.getRSSI();
+            }
+        }
+
+        scan->clearResults();
+
+        String out;
+        serializeJson(doc, out);
+        request->send(200, "application/json", out);
     });
 
     // --- 404 fallback ---

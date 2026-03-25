@@ -86,12 +86,13 @@ input:focus{outline:none;border-color:#58a6ff}
 
 <p class="section-title">BLE RadiaCode Devices</p>
 <div id="ble-list"></div>
-<div class="card" id="ble-add">
-  <div class="row">
-    <div><label>MAC Address (e.g. AA:BB:CC:DD:EE:FF)</label><input type="text" id="new-ble-mac" placeholder="AA:BB:CC:DD:EE:FF"></div>
-    <div style="flex:0"><label>&nbsp;</label><button class="btn" onclick="addBle()">Add</button></div>
+<div class="card" id="ble-scan-card">
+  <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.5rem">
+    <button class="btn" onclick="scanBle()" id="ble-scan-btn">Scan for RadiaCode</button>
+    <span id="ble-scan-status" style="font-size:0.8rem;color:#8b949e"></span>
   </div>
-  <span style="font-size:0.75rem;color:#8b949e">Add RadiaCode BLE MAC addresses to connect via Bluetooth instead of USB. Up to 4 devices.</span>
+  <div id="ble-scan-results"></div>
+  <span style="font-size:0.75rem;color:#8b949e">Scans for nearby RadiaCode devices via Bluetooth. Tap a device to add it. Up to 4 devices.</span>
 </div>
 
 <p class="section-title">Geolocation</p>
@@ -186,20 +187,60 @@ function renderBle(){
   });
 }
 
-function addBle(){
-  var mac=document.getElementById('new-ble-mac').value.trim().toUpperCase();
-  if(!mac){toast('MAC address required',true);return;}
-  if(!/^([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(mac)){toast('Invalid MAC format (AA:BB:CC:DD:EE:FF)',true);return;}
-  if(bleDevices.length>=4){toast('Max 4 BLE devices',true);return;}
-  if(bleDevices.indexOf(mac)>=0){toast('Device already added',true);return;}
-  bleDevices.push(mac);
-  document.getElementById('new-ble-mac').value='';
-  renderBle();
-}
-
 function removeBle(i){
   bleDevices.splice(i,1);
   renderBle();
+}
+
+function addBleFromScan(mac){
+  mac=mac.toUpperCase();
+  if(bleDevices.length>=4){toast('Max 4 BLE devices',true);return;}
+  if(bleDevices.indexOf(mac)>=0){toast('Device already added',true);return;}
+  bleDevices.push(mac);
+  renderBle();
+  toast('Added '+mac);
+  renderScanResults(lastScanResults);
+}
+
+var lastScanResults=[];
+
+function renderScanResults(devices){
+  lastScanResults=devices;
+  var el=document.getElementById('ble-scan-results');
+  if(!devices||devices.length===0){el.innerHTML='<div style="font-size:0.8rem;color:#8b949e;padding:0.25rem 0">No RadiaCode devices found.</div>';return;}
+  el.innerHTML='';
+  devices.forEach(function(d){
+    var already=bleDevices.indexOf(d.mac.toUpperCase())>=0;
+    var div=document.createElement('div');
+    div.style.cssText='display:flex;align-items:center;gap:0.5rem;padding:0.35rem 0;border-bottom:1px solid #21262d';
+    var rssiColor=d.rssi>-60?'#3fb950':d.rssi>-80?'#d29922':'#f85149';
+    div.innerHTML='<span style="flex:1;font-size:0.875rem">'+d.name+'</span>'
+      +'<span style="font-size:0.75rem;color:#8b949e">'+d.mac+'</span>'
+      +'<span style="font-size:0.75rem;color:'+rssiColor+'">'+d.rssi+' dBm</span>'
+      +(already?'<span class="btn btn-sm" style="opacity:0.5;cursor:default">Added</span>'
+      :'<button class="btn btn-sm btn-primary" onclick="addBleFromScan(\''+d.mac+'\')">Add</button>');
+    el.appendChild(div);
+  });
+}
+
+function scanBle(){
+  var btn=document.getElementById('ble-scan-btn');
+  var stat=document.getElementById('ble-scan-status');
+  btn.disabled=true;btn.textContent='Scanning...';
+  stat.textContent='Scanning for ~5 seconds...';
+  document.getElementById('ble-scan-results').innerHTML='';
+  fetch('/api/ble/scan',{method:'POST'})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      btn.disabled=false;btn.textContent='Scan for RadiaCode';
+      stat.textContent=d.devices.length+' device(s) found';
+      renderScanResults(d.devices);
+    })
+    .catch(function(){
+      btn.disabled=false;btn.textContent='Scan for RadiaCode';
+      stat.textContent='';
+      toast('BLE scan failed',true);
+    });
 }
 
 function loadSettings(){
