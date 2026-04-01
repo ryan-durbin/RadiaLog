@@ -1,7 +1,11 @@
 #include <Arduino.h>
 #include <time.h>
+#include <sys/time.h>
+#include <esp_sntp.h>
+#include <esp_sleep.h>
 #include <ESPmDNS.h>
 #include "config.h"
+#include "shipping_mode.h"
 #include "config_mgr.h"
 #include "buffer.h"
 #include "wifi_mgr.h"
@@ -9,8 +13,19 @@
 #include "uploader.h"
 #include "radiacode.h"
 #include "radiacode_mgr.h"
-#include "battery.h"
+#include "gps/gps.h"
+#ifdef GPS_TYPE_I2C
+#include <Wire.h>
+#include "gps/lc76g_i2c.h"
+#else
 #include "gps/atgm336h.h"
+#endif
+
+#ifdef BATTERY_TYPE_AXP2101
+#include "battery_axp2101.h"
+#else
+#include "battery.h"
+#endif
 #include "location_provider.h"
 #include "portal/portal.h"
 #include "portal/debug_ws.h"
@@ -32,17 +47,32 @@ static Led              led;
 static Uploader         uploader;
 static radiacode::RadiaCode radiaCode;
 static radiacode::RadiaCodeMgr radiaCodeMgr;
-static ATGM336H         gps(Serial1, GPS_TX_PIN, GPS_RX_PIN, GPS_BAUD);
+#ifdef GPS_TYPE_I2C
+static LC76G_I2C        gps(Wire, GPS_I2C_SDA, GPS_I2C_SCL, GPS_I2C_ADDR);
+#else
+static ATGM336H        gps(Serial1, GPS_TX_PIN, GPS_RX_PIN, GPS_BAUD);
+#endif
 static StatusPortal     portal;
+static ShippingMode     shippingMode;
+#ifdef BATTERY_TYPE_AXP2101
+static BatteryAXP2101   battery;
+#else
 static Battery          battery;
+#endif
 static LocationProvider locationProvider;
 
 #ifdef HAS_DISPLAY
 static Display          display;
 #endif
 
-// --- NTP state ---------------------------------------------------------------
-static volatile bool ntpSynced = false;
+// --- Time sync state ---------------------------------------------------------
+static volatile bool timeSynced = false;
+static volatile bool ntpSyncedFlag = false;  // Set by SNTP callback when NTP actually syncs
+static String timeSyncSource = "";  // "NTP" or "GPS"
+
+static void onNtpSync(struct timeval* tv) {
+    ntpSyncedFlag = true;
+}
 
 static bool isTimeSynced() {
     return time(nullptr) > 1000000000;
@@ -99,6 +129,7 @@ void setup() {
     debugWS.log(MOD_WIFI, LVL_INFO, "[RadiaLog] WiFi initialized. AP: " + wifi.getAPIP().toString());
 
     // 6. NTP sync + mDNS + upload check on WiFi connect
+    sntp_set_time_sync_notification_cb(onNtpSync);
     wifi.registerOnConnect([]() {
         configTime(0, 0, NTP_SERVER_1, NTP_SERVER_2);
         if (MDNS.begin("radialog")) {
@@ -151,20 +182,30 @@ void setup() {
             "[RadiaLog] Device manager ready. BLE devices: " + String(bleMacs.size()));
     }
 
-    // 10. GPS UART
+    // 10. GPS
     gps.begin();
-    debugWS.log(MOD_GPS, LVL_INFO, "[RadiaLog] GPS initialized. TX=" + String(GPS_TX_PIN)
+#ifdef GPS_TYPE_I2C
+    debugWS.log(MOD_GPS, LVL_INFO, "[RadiaLog] GPS initialized (I2C). SDA=" + String(GPS_I2C_SDA)
+        + " SCL=" + String(GPS_I2C_SCL));
+#else
+    debugWS.log(MOD_GPS, LVL_INFO, "[RadiaLog] GPS initialized (UART). TX=" + String(GPS_TX_PIN)
         + " RX=" + String(GPS_RX_PIN));
+#endif
 
     // 10b. Location provider (clears cached position on boot)
     locationProvider.begin(configMgr.getGoogleApiKey());
     debugWS.log(MOD_GPS, LVL_INFO, "[RadiaLog] LocationProvider initialized.");
 
-    // 11. Battery ADC
+    // 11. Battery
+#ifdef BATTERY_TYPE_AXP2101
+    battery.begin(Wire, PMU_I2C_SDA, PMU_I2C_SCL);
+#else
     battery.begin();
+#endif
 
     // 12. LED
     led.begin();
+    shippingMode.begin();
     if (radiaCodeMgr.connectedCount() == 0) {
         led.setPattern(LedPattern::DOUBLE_FLASH);
     } else {
@@ -191,6 +232,24 @@ static uint32_t loopCounter = 0;
 
 void loop() {
     loopCounter++;
+
+    // --- -1. Shipping mode check ---------------------------------------------
+    shippingMode.update();
+    if (shippingMode.shouldEnterSleep()) {
+        // Set TRIPLE_FLASH pattern and wait for completion
+        led.setPattern(LedPattern::TRIPLE_FLASH);
+        // Keep updating LED until pattern is complete
+        while (!led.isPatternComplete()) {
+            led.update();
+            delay(10);
+        }
+        // Flush persistent state
+        configMgr.flushTotalReadingsLogged();
+        Serial.println(F("[RadiaLog] Entering shipping mode (deep sleep)..."));
+        Serial.flush();
+        // No wakeup sources configured - only reset button wakes
+        esp_deep_sleep_start();
+    }
 
     // --- 0. WiFi reconnect ---------------------------------------------------
     wifi.update();
@@ -241,20 +300,56 @@ void loop() {
             r.altitude_accuracy = 0.0f;
 
             readingBuffer.appendReading(r);
+            configMgr.incrementTotalReadingsLogged();
         }
     }
 
     // --- 4. Battery ----------------------------------------------------------
+    bool wasCharging = battery.isCharging();
     battery.update();
+
+    // Wake display when USB power is connected (charging state transitions off→on)
+#ifdef HAS_DISPLAY
+    if (!wasCharging && battery.isCharging()) {
+        display.wake();
+    }
+#endif
 
     // --- 5. Update portal live data ------------------------------------------
     portal.updateReading(dose_rate, count_rate);
     portal.updateBattery(battery.getVoltage(), battery.getPercent());
 
-    if (!ntpSynced && isTimeSynced()) {
-        ntpSynced = true;
-        portal.setTimeSynced(true);
-        debugWS.log(MOD_WIFI, LVL_INFO, "[RadiaLog] NTP time synced.");
+    // --- Time sync: NTP (preferred) or GPS fallback ---
+    if (ntpSyncedFlag) {
+        // SNTP callback fired — NTP is authoritative regardless of prior source
+        ntpSyncedFlag = false;
+        if (timeSyncSource != "NTP") {
+            timeSynced = true;
+            bool upgraded = timeSyncSource == "GPS";
+            timeSyncSource = "NTP";
+            portal.setTimeSyncSource("NTP");
+            debugWS.log(MOD_WIFI, LVL_INFO,
+                upgraded ? "[RadiaLog] Time source upgraded from GPS to NTP."
+                         : "[RadiaLog] NTP time synced.");
+        }
+    } else if (!timeSynced && gps.hasValidTime()) {
+        // No NTP yet — set system clock from GPS UTC
+        struct tm t = {};
+        t.tm_year = gps.getYear() - 1900;
+        t.tm_mon  = gps.getMonth() - 1;
+        t.tm_mday = gps.getDay();
+        t.tm_hour = gps.getHour();
+        t.tm_min  = gps.getMinute();
+        t.tm_sec  = gps.getSecond();
+        time_t epoch = mktime(&t);  // ESP32 TZ defaults to UTC
+        if (epoch > 1000000000) {
+            struct timeval tv = { .tv_sec = epoch, .tv_usec = 0 };
+            settimeofday(&tv, nullptr);
+            timeSynced = true;
+            timeSyncSource = "GPS";
+            portal.setTimeSyncSource("GPS");
+            debugWS.log(MOD_GPS, LVL_INFO, "[RadiaLog] System time set from GPS.");
+        }
     }
 
     // --- 6. LED pattern ------------------------------------------------------
@@ -275,14 +370,24 @@ void loop() {
     if (display.isOn()) {
         BufferStats stats = readingBuffer.getStats();
 
-        // Compute last upload string
+        // Compute last upload string — prefer persisted epoch (survives reboot)
         String lastUpStr = "Never";
-        unsigned long lastUp = uploader.getLastUploadTime();
-        if (lastUp > 0) {
-            unsigned long ago = (millis() - lastUp) / 1000;
+        unsigned long lastUpMillis = uploader.getLastUploadTime();
+        time_t lastUpEpoch = uploader.getLastUploadEpoch();
+        if (lastUpMillis > 0) {
+            unsigned long ago = (millis() - lastUpMillis) / 1000;
             if (ago < 60) lastUpStr = String(ago) + "s ago";
             else if (ago < 3600) lastUpStr = String(ago / 60) + "m ago";
             else lastUpStr = String(ago / 3600) + "h ago";
+        } else if (lastUpEpoch > 0) {
+            time_t now = time(nullptr);
+            if (now > 1000000000) {
+                long ago = now - lastUpEpoch;
+                if (ago < 60) lastUpStr = String(ago) + "s ago";
+                else if (ago < 3600) lastUpStr = String(ago / 60) + "m ago";
+                else if (ago < 86400) lastUpStr = String(ago / 3600) + "h ago";
+                else lastUpStr = String(ago / 86400) + "d ago";
+            }
         }
 
         DisplayStatus ds;
@@ -294,21 +399,20 @@ void loop() {
         ds.lastUpload     = lastUpStr;
         ds.totalReadings  = stats.depth;
         ds.pendingReadings = stats.pending;
+        ds.totalReadingsLogged = configMgr.getTotalReadingsLogged();
         ds.doseRate       = dose_rate;
         ds.countRate      = count_rate;
         ds.batteryVoltage = battery.getVoltage();
         ds.batteryPercent = battery.getPercent();
         ds.gpsFix         = locationValid;
         ds.gpsSats        = gps.getSatellites();
+        ds.timeSyncSource = timeSyncSource;
         ds.loopCount      = loopCounter;
 
         display.draw(ds);
     }
 #endif
 
-    // --- 8. Buffer maintenance -----------------------------------------------
-    readingBuffer.pruneUploaded();
-
-    // --- 9. Wait until next reading interval ---------------------------------
+    // --- 8. Wait until next reading interval ---------------------------------
     delay(configMgr.getReadingIntervalMs());
 }
