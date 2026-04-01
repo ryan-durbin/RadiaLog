@@ -13,6 +13,7 @@ Led::Led()
     , _ledState(false)
     , _flashCount(0)
     , _inPause(false)
+    , _patternComplete(false)
 {
 }
 
@@ -30,6 +31,7 @@ void Led::setPattern(LedPattern pattern) {
     _ledState = false;
     _flashCount = 0;
     _inPause = false;
+    _patternComplete = false;
 
     // Apply immediate state for simple patterns
     if (pattern == LedPattern::SOLID) {
@@ -110,6 +112,35 @@ void Led::update() {
                             _lastToggle = now;
                         }
                     }
+                }
+            }
+            break;
+        }
+
+        case LedPattern::TRIPLE_FLASH: {
+            // Finite pattern: SHIPPING_MODE_BLINK_COUNT flashes then stop.
+            // Each flash = SHIPPING_MODE_BLINK_MS on, SHIPPING_MODE_BLINK_MS off.
+            if (_patternComplete) break;
+
+            unsigned long elapsed = now - _lastToggle;
+
+            if (_ledState) {
+                // Currently ON — wait for blink duration
+                if (elapsed >= SHIPPING_MODE_BLINK_MS) {
+                    _setLed(false);
+                    _lastToggle = now;
+                    _flashCount++;
+                    if (_flashCount >= SHIPPING_MODE_BLINK_COUNT) {
+                        // All flashes done — transition to OFF
+                        _patternComplete = true;
+                        _pattern = LedPattern::OFF;
+                    }
+                }
+            } else {
+                // Currently OFF — wait for gap then start next flash
+                if (elapsed >= SHIPPING_MODE_BLINK_MS) {
+                    _setLed(true);
+                    _lastToggle = now;
                 }
             }
             break;
