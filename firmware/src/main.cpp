@@ -235,7 +235,8 @@ void loop() {
 
     // --- -1. Shipping mode check ---------------------------------------------
     shippingMode.update();
-    if (shippingMode.shouldEnterSleep()) {
+    if (shippingMode.shouldEnterSleep() || g_shutdownRequested) {
+        g_shutdownRequested = false;  // clear flag (in case wake path re-runs)
         // Set TRIPLE_FLASH pattern and wait for completion
         led.setPattern(LedPattern::TRIPLE_FLASH);
         // Keep updating LED until pattern is complete

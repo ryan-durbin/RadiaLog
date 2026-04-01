@@ -1,4 +1,5 @@
 #include "portal.h"
+#include "../config.h"
 #include "debug_ws.h"
 #include "html/dashboard_html.h"
 #include "html/debug_html.h"
@@ -7,7 +8,14 @@
 #include <ArduinoJson.h>
 #include <LittleFS.h>
 #include <Update.h>
+#include <HTTPClient.h>
+#include <WiFiClientSecure.h>
 #include <NimBLEDevice.h>
+
+// =============================================================================
+// Shutdown flag — set by POST /api/actions/shutdown, read in main loop
+// =============================================================================
+volatile bool g_shutdownRequested = false;
 
 // --- BLE scan state (shared between request handlers and scan task) ----------
 struct BleScanEntry {
@@ -36,7 +44,7 @@ StatusPortal::StatusPortal()
     , _countRate(0.0f)
     , _batteryVoltage(0.0f)
     , _batteryPercent(0)
-    , _timeSynced(false)
+    , _timeSyncSource("")
 {
 }
 
@@ -73,8 +81,8 @@ void StatusPortal::updateBattery(float voltage, uint8_t percent) {
     _batteryPercent = percent;
 }
 
-void StatusPortal::setTimeSynced(bool synced) {
-    _timeSynced = synced;
+void StatusPortal::setTimeSyncSource(const String& source) {
+    _timeSyncSource = source;
 }
 
 // =============================================================================
@@ -205,6 +213,15 @@ void StatusPortal::_registerRoutes() {
                     }
                 }
 
+                // Apply new token/URL to uploader immediately
+                if (ok && _uploader) {
+                    UploadConfig ucfg;
+                    ucfg.radiamaps_url = _cfg->getUploadUrl();
+                    ucfg.device_token  = _cfg->getToken();
+                    ucfg.device_id     = _cfg->getDeviceId();
+                    _uploader->updateConfig(ucfg);
+                }
+
                 // Apply new BLE device list immediately (without reboot)
                 if (ok && _rcMgr) {
                     std::vector<String> bleMacs;
@@ -236,13 +253,14 @@ void StatusPortal::_registerRoutes() {
 
     _server->on("/api/ota", HTTP_POST,
         // Completion handler — runs after upload finishes
-        [](AsyncWebServerRequest* request) {
+        [this](AsyncWebServerRequest* request) {
             bool ok = !Update.hasError();
             String resp = ok
                 ? "{\"success\":true,\"message\":\"Update successful, rebooting...\"}"
                 : "{\"success\":false,\"error\":\"Update failed\"}";
             request->send(200, "application/json", resp);
             if (ok) {
+                _cfg->flushTotalReadingsLogged();
                 delay(500);
                 ESP.restart();
             }
@@ -278,10 +296,17 @@ void StatusPortal::_registerRoutes() {
         request->send(200, "application/json", "{\"success\":true,\"message\":\"Upload triggered\"}");
     });
 
-    _server->on("/api/actions/reboot", HTTP_POST, [](AsyncWebServerRequest* request) {
+    _server->on("/api/actions/reboot", HTTP_POST, [this](AsyncWebServerRequest* request) {
+        _cfg->flushTotalReadingsLogged();
         request->send(200, "application/json", "{\"success\":true,\"message\":\"Rebooting...\"}");
         delay(500);
         ESP.restart();
+    });
+
+    _server->on("/api/actions/shutdown", HTTP_POST, [this](AsyncWebServerRequest* request) {
+        request->send(200, "application/json",
+            "{\"success\":true,\"message\":\"Entering shipping mode...\"}");
+        g_shutdownRequested = true;
     });
 
     _server->on("/api/actions/clear", HTTP_POST, [this](AsyncWebServerRequest* request) {
@@ -291,6 +316,107 @@ void StatusPortal::_registerRoutes() {
         _buf->begin();
         request->send(200, "application/json", "{\"success\":true,\"message\":\"Buffer cleared\"}");
     });
+
+    // POST /api/actions/verify-token — verify a device token against RadiaMaps
+    _server->on("/api/actions/verify-token", HTTP_POST,
+        [](AsyncWebServerRequest* request) {},
+        nullptr,
+        [this](AsyncWebServerRequest* request, uint8_t* data, size_t len,
+               size_t index, size_t total) {
+            if (index == 0 && total < 4096) {
+                request->_tempObject = new String();
+                static_cast<String*>(request->_tempObject)->reserve(total);
+            }
+            if (request->_tempObject == nullptr) return;
+
+            String* bodyStr = static_cast<String*>(request->_tempObject);
+            for (size_t i = 0; i < len; i++) {
+                *bodyStr += static_cast<char>(data[i]);
+            }
+
+            if (index + len < total) return;  // wait for full body
+
+            String body = *bodyStr;
+            delete bodyStr;
+            request->_tempObject = nullptr;
+
+            JsonDocument reqDoc;
+            if (deserializeJson(reqDoc, body)) {
+                request->send(400, "application/json",
+                    "{\"success\":false,\"error\":\"Invalid JSON\"}");
+                return;
+            }
+
+            String token = reqDoc["token"].as<String>();
+            if (token.length() == 0) {
+                request->send(400, "application/json",
+                    "{\"success\":false,\"error\":\"Token is empty\"}");
+                return;
+            }
+
+            // Derive verify URL from configured upload URL
+            String verifyUrl = _cfg->getUploadUrl();
+            if (verifyUrl.endsWith("/upload")) {
+                verifyUrl = verifyUrl.substring(0, verifyUrl.length() - 7) + "/verify";
+            } else {
+                int lastSlash = verifyUrl.lastIndexOf('/');
+                if (lastSlash > 0) {
+                    verifyUrl = verifyUrl.substring(0, lastSlash) + "/verify";
+                }
+            }
+
+            if (verifyUrl.length() == 0) {
+                request->send(400, "application/json",
+                    "{\"success\":false,\"error\":\"No upload URL configured\"}");
+                return;
+            }
+
+            debugWS.log(MOD_UPLOAD, LVL_INFO,
+                "[Portal] Verifying token via " + verifyUrl);
+
+            WiFiClientSecure client;
+            client.setInsecure();
+            client.setTimeout(15);
+
+            HTTPClient http;
+            http.setConnectTimeout(10000);
+            http.setTimeout(15000);
+            http.begin(client, verifyUrl);
+            http.addHeader("Content-Type", "application/json");
+            http.addHeader("X-Device-Token", token);
+
+            int httpCode = http.POST("");
+            String respOut;
+
+            if (httpCode == HTTP_CODE_OK) {
+                String response = http.getString();
+                JsonDocument respDoc;
+                DeserializationError err = deserializeJson(respDoc, response);
+                if (err == DeserializationError::Ok && respDoc["username"].is<const char*>()) {
+                    JsonDocument out;
+                    out["success"]      = true;
+                    out["username"]     = respDoc["username"];
+                    out["subscription"] = respDoc["subscription_status"];
+                    serializeJson(out, respOut);
+                } else {
+                    respOut = "{\"success\":false,\"error\":\"Unexpected server response\"}";
+                }
+            } else if (httpCode == 401 || httpCode == 403) {
+                respOut = "{\"success\":false,\"error\":\"Invalid token\"}";
+            } else if (httpCode > 0) {
+                respOut = "{\"success\":false,\"error\":\"Server returned HTTP " + String(httpCode) + "\"}";
+            } else {
+                respOut = "{\"success\":false,\"error\":\"Connection failed — check WiFi\"}";
+            }
+
+            http.end();
+
+            debugWS.log(MOD_UPLOAD, LVL_INFO,
+                "[Portal] Token verify result: " + respOut.substring(0, 200));
+
+            request->send(200, "application/json", respOut);
+        }
+    );
 
     // --- BLE scan endpoints (async to avoid watchdog reset) ---
     // POST /api/ble/scan  — kick off a background scan
@@ -479,11 +605,23 @@ void StatusPortal::_handleApiStatus(AsyncWebServerRequest* request) {
     doc["buffer_pending"] = stats.pending;
     doc["buffer_total"]   = stats.depth;
 
-    // Upload
-    unsigned long lastUp = _uploader->getLastUploadTime();
-    if (lastUp > 0) {
-        unsigned long ago = (millis() - lastUp) / 1000;
+    // Upload — prefer persisted epoch (survives reboot)
+    unsigned long lastUpMillis = _uploader->getLastUploadTime();
+    time_t lastUpEpoch = _uploader->getLastUploadEpoch();
+    if (lastUpMillis > 0) {
+        unsigned long ago = (millis() - lastUpMillis) / 1000;
         doc["last_upload"] = String(ago) + "s ago";
+    } else if (lastUpEpoch > 0) {
+        time_t now = time(nullptr);
+        if (now > 1000000000) {
+            long ago = now - lastUpEpoch;
+            if (ago < 60) doc["last_upload"] = String(ago) + "s ago";
+            else if (ago < 3600) doc["last_upload"] = String(ago / 60) + "m ago";
+            else if (ago < 86400) doc["last_upload"] = String(ago / 3600) + "h ago";
+            else doc["last_upload"] = String(ago / 86400) + "d ago";
+        } else {
+            doc["last_upload"] = "Never";
+        }
     } else {
         doc["last_upload"] = "Never";
     }
@@ -493,10 +631,41 @@ void StatusPortal::_handleApiStatus(AsyncWebServerRequest* request) {
     doc["battery_percent"] = _batteryPercent;
 
     // Time
-    doc["time_synced"] = _timeSynced;
+    doc["time_synced"] = _timeSyncSource.length() > 0;
+    doc["time_sync_source"] = _timeSyncSource;
     time_t now = time(nullptr);
     if (now > 1000000000) {
         doc["system_time"] = static_cast<unsigned long>(now);
+    }
+
+    // Lifetime readings logged (gamification counter)
+    doc["total_readings_logged"] = _cfg->getTotalReadingsLogged();
+
+    // Display capabilities (so the web UI can conditionally show display settings)
+#ifdef HAS_DISPLAY
+    doc["has_display"] = true;
+#ifdef DISPLAY_CIRCULAR
+    doc["display_shape"] = "circular";
+#else
+    doc["display_shape"] = "rectangular";
+#endif
+    doc["display_width"]  = DISPLAY_WIDTH;
+    doc["display_height"] = DISPLAY_HEIGHT;
+#else
+    doc["has_display"] = false;
+#endif
+
+    // RadiaMaps account (cached)
+    const AccountInfo& acct = _uploader->getAccountInfo();
+    if (acct.valid) {
+        doc["rm_username"]          = acct.username;
+        doc["rm_subscription"]      = acct.subscription;
+        if (acct.lifetime_readings >= 0) {
+            doc["rm_lifetime_readings"] = acct.lifetime_readings;
+        }
+        if (acct.last_queried > 0) {
+            doc["rm_last_queried"] = static_cast<unsigned long>(acct.last_queried);
+        }
     }
 
     String out;

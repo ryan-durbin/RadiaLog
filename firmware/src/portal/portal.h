@@ -13,6 +13,11 @@
 #include "../uploader.h"
 
 // =============================================================================
+// Shutdown flag — set by POST /api/actions/shutdown, checked in main loop
+// =============================================================================
+extern volatile bool g_shutdownRequested;
+
+// =============================================================================
 // RadiaLog Firmware - Status Portal
 // Async web server providing device status, log streaming, config UI,
 // data export, and OTA firmware updates. Serves on port 80.
@@ -33,8 +38,8 @@ public:
     /// Update battery voltage (called from main loop).
     void updateBattery(float voltage, uint8_t percent);
 
-    /// Update NTP sync status.
-    void setTimeSynced(bool synced);
+    /// Update time sync status with source ("NTP" or "GPS").
+    void setTimeSyncSource(const String& source);
 
 private:
     AsyncWebServer*       _server;
@@ -50,7 +55,7 @@ private:
     volatile float   _countRate;
     volatile float   _batteryVoltage;
     volatile uint8_t _batteryPercent;
-    volatile bool    _timeSynced;
+    String           _timeSyncSource;  // "" = not synced, "NTP", "GPS"
 
     // Route handlers
     void _registerRoutes();
