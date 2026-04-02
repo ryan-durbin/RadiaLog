@@ -1,8 +1,8 @@
 # RadiaLog
 
-**Standalone ESP32-S3 USB datalogger for RadiaCode radiation detectors with GPS and WiFi.**
+**Standalone ESP32-S3 datalogger for RadiaCode radiation detectors with GPS and WiFi.**
 
-Plug into a RadiaCode's USB-C port and RadiaLog automatically logs dose rate and count rate paired with GPS coordinates, then uploads everything to [RadiaMaps.com](https://radiamaps.com) over WiFi. No phone app required.
+Connect to a RadiaCode via USB or Bluetooth and RadiaLog automatically logs dose rate and count rate paired with GPS coordinates, then uploads everything to [RadiaMaps.com](https://radiamaps.com) over WiFi. No phone app required.
 
 ![RadiaLog Device](docs/images/radialog-device.jpg)
 <!-- TODO: Add device photos -->
@@ -36,15 +36,20 @@ Plug into a RadiaCode's USB-C port and RadiaLog automatically logs dose rate and
 [Download on MakerWorld](https://makerworld.com/en/models/XXXXXX)
 <!-- TODO: Add MakerWorld link when published -->
 
-### Supported Boards
+### Supported Board
 
-| Board | Display | Notes |
-|-------|---------|-------|
-| **Seeed XIAO ESP32S3** | None | Primary target, most compact |
-| LilyGO T-Display S3 | 1.9" TFT | Built-in color display |
-| LilyGO T-Display S3 AMOLED | 1.91" AMOLED | High-contrast display |
-| Waveshare ESP32-S3 Round | 1.28" circular | Compact round form factor |
-| Waveshare AMOLED 1.75-G | 1.75" circular AMOLED | AXP2101 PMU, LC76G GPS (I2C) |
+The **Seeed XIAO ESP32S3** is the only officially supported board. The recommended build above is the tested, supported configuration.
+
+### Other Boards (Here Be Dragons)
+
+Firmware builds exist for the boards below, but they're just for fun. They might work, they might not. No guarantees, no support.
+
+| Board | Display | Build Target |
+|-------|---------|--------------|
+| LilyGO T-Display S3 | 1.9" TFT | `lilygo_tdisplay_s3` |
+| LilyGO T-Display S3 AMOLED | 1.91" AMOLED | `lilygo_tdisplay_s3_amoled` |
+| Waveshare ESP32-S3 Round | 1.28" circular | `waveshare_round` |
+| Waveshare AMOLED 1.75-G | 1.75" circular AMOLED | `waveshare_amoled_175` |
 
 ## Getting Started
 
@@ -67,8 +72,6 @@ pio run -e seeed_xiao_esp32s3 --target upload
 # Monitor serial output
 pio device monitor -b 115200
 ```
-
-Other build targets: `lilygo_tdisplay_s3`, `lilygo_tdisplay_s3_amoled`, `waveshare_round`, `waveshare_amoled_175`
 
 ### Setup
 
