@@ -1,5 +1,7 @@
 # RadiaLog
 
+> **Don't want to build it yourself?** Assembled RadiaLog devices are available — see [Assembly Services](#assembly) below.
+
 **Standalone ESP32-S3 datalogger for RadiaCode radiation detectors with GPS and WiFi.**
 
 Connect to a RadiaCode via USB or Bluetooth and RadiaLog automatically logs dose rate and count rate paired with GPS coordinates, then uploads everything to [RadiaMaps.com](https://radiamaps.com) over WiFi. No phone app required.
@@ -121,6 +123,17 @@ firmware/
     ├── battery.h/cpp       # Battery monitoring
     └── led.h/cpp           # Status LED patterns
 ```
+
+## Assembly
+
+Don't have the tools or time to build one yourself? Pre-assembled RadiaLog devices are available for **$50 + shipping**. Each unit is hand-assembled and tested in the USA.
+
+**What you get:**
+- Fully assembled RadiaLog (Seeed XIAO ESP32S3 + ATGM336H GPS)
+- Firmware pre-flashed and ready to go
+- 3D printed case included
+
+**To order**, email [radialog@radiamaps.com](mailto:radialog@radiamaps.com) or reach out on the [RadiaMaps Discord](https://discord.gg/radiamaps).
 
 ## License
 
