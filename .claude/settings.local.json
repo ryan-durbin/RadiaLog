@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -r \"class\\\\|struct\" /home/ryandurbin/projects/RadiaLog/)",
+      "Bash(git add:*)",
+      "Bash(git commit -m ':*)",
+      "Bash(git submodule:*)"
+    ]
+  }
+}

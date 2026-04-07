@@ -103,6 +103,17 @@ int ATGM336H::getSatellites() const {
     return _satellites;
 }
 
+bool ATGM336H::hasValidTime() const {
+    return _gps.date.isValid() && _gps.time.isValid() && _gps.date.year() >= 2024;
+}
+
+uint16_t ATGM336H::getYear() const { return _gps.date.year(); }
+uint8_t  ATGM336H::getMonth() const { return _gps.date.month(); }
+uint8_t  ATGM336H::getDay() const { return _gps.date.day(); }
+uint8_t  ATGM336H::getHour() const { return _gps.time.hour(); }
+uint8_t  ATGM336H::getMinute() const { return _gps.time.minute(); }
+uint8_t  ATGM336H::getSecond() const { return _gps.time.second(); }
+
 // =============================================================================
 // A-GPS: time and position aiding via PCAS commands
 // =============================================================================

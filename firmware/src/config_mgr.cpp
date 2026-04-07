@@ -22,6 +22,8 @@ ConfigMgr::ConfigMgr()
     , _googleApiKey("")
     , _displayTimeoutSec(0)
     , _buttonWakeEnabled(true)
+    , _totalReadingsLogged(0)
+    , _readingsSinceFlush(0)
 {
 }
 
@@ -218,6 +220,9 @@ bool ConfigMgr::saveToNVS() {
     // Display
     prefs.putUShort("disp_timeout", _displayTimeoutSec);
 
+    // Lifetime counter
+    prefs.putULong64("total_rdgs", _totalReadingsLogged);
+
     // Mark NVS as seeded
     prefs.putBool("seeded", true);
 
@@ -261,6 +266,9 @@ bool ConfigMgr::loadFromNVS() {
 
     // Display
     _displayTimeoutSec = prefs.getUShort("disp_timeout", _displayTimeoutSec);
+
+    // Lifetime counter
+    _totalReadingsLogged = prefs.getULong64("total_rdgs", 0);
 
     prefs.end();
     return true;
@@ -387,6 +395,29 @@ bool ConfigMgr::getButtonWakeEnabled() const {
 void ConfigMgr::setButtonWakeEnabled(bool enabled) {
     _buttonWakeEnabled = enabled;
 }
+
+uint64_t ConfigMgr::getTotalReadingsLogged() const {
+    return _totalReadingsLogged;
+}
+
+void ConfigMgr::incrementTotalReadingsLogged() {
+    _totalReadingsLogged++;
+    _readingsSinceFlush++;
+    if (_readingsSinceFlush >= FLUSH_INTERVAL) {
+        flushTotalReadingsLogged();
+    }
+}
+
+void ConfigMgr::flushTotalReadingsLogged() {
+    if (_readingsSinceFlush == 0) return;
+    Preferences prefs;
+    if (prefs.begin(NVS_NAMESPACE, false)) {
+        prefs.putULong64("total_rdgs", _totalReadingsLogged);
+        prefs.end();
+    }
+    _readingsSinceFlush = 0;
+}
+
 
 void ConfigMgr::setBleDevices(const std::vector<String>& macs) {
     _bleDeviceMacs.clear();

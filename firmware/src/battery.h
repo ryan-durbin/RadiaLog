@@ -33,6 +33,9 @@ public:
     /// True if battery voltage reads above 2.0V (divider is connected).
     bool isPresent() const { return _voltage > 2.0f; }
 
+    /// True if voltage suggests USB charging (above fully-charged threshold).
+    bool isCharging() const { return _voltage > 4.30f; }
+
 private:
     float _voltage;
 };

@@ -77,7 +77,11 @@ input:focus{outline:none;border-color:#58a6ff}
 <p class="section-title">RadiaMaps</p>
 <div class="card">
   <label>Device Token</label>
-  <input type="password" id="cfg-token">
+  <div style="display:flex;gap:0.5rem;align-items:flex-start">
+    <input type="password" id="cfg-token" style="flex:1;margin-bottom:0">
+    <button class="btn" onclick="verifyToken()" id="verify-btn" style="white-space:nowrap;margin-top:1px">Verify</button>
+  </div>
+  <div id="verify-result" style="font-size:0.8rem;margin:0.35rem 0 0.5rem;display:none"></div>
   <label>Upload URL</label>
   <input type="text" id="cfg-url">
   <label>Device ID</label>
@@ -354,6 +358,31 @@ function uploadOTA(){
   xhr.onerror=function(){stat.textContent='Network error';btn.disabled=false;btn.textContent='Upload & Flash';toast('Upload failed',true);};
   var fd=new FormData();fd.append('firmware',file,file.name);
   xhr.send(fd);
+}
+
+function verifyToken(){
+  var btn=document.getElementById('verify-btn');
+  var res=document.getElementById('verify-result');
+  var token=document.getElementById('cfg-token').value.trim();
+  if(!token){res.style.display='block';res.style.color='#f85149';res.textContent='Enter a token first';return;}
+  btn.disabled=true;btn.textContent='Verifying...';
+  res.style.display='none';
+  fetch('/api/actions/verify-token',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:token})})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      res.style.display='block';
+      if(d.success){
+        res.style.color='#3fb950';
+        res.textContent='\u2713 Valid — '+d.username+(d.subscription?' ('+d.subscription+')':'');
+      } else {
+        res.style.color='#f85149';
+        res.textContent='\u2717 '+(d.error||'Verification failed');
+      }
+    })
+    .catch(function(){
+      res.style.display='block';res.style.color='#f85149';res.textContent='\u2717 Network error — is WiFi connected?';
+    })
+    .finally(function(){btn.disabled=false;btn.textContent='Verify';});
 }
 
 loadSettings();

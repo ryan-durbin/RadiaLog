@@ -116,7 +116,7 @@ bool ReadingBuffer::_saveIndex() {
 BufferStats ReadingBuffer::getStats() const {
     BufferStats stats;
     stats.depth            = _depth;
-    stats.pending          = _depth - _uploadedInBuffer;
+    stats.pending          = (_uploadedInBuffer >= _depth) ? 0 : _depth - _uploadedInBuffer;
     stats.lifetimeLogged   = _lifetimeLogged;
     stats.lifetimeUploaded = _lifetimeUploaded;
     return stats;
@@ -358,7 +358,7 @@ void ReadingBuffer::markUploaded(const uint32_t* ids, uint32_t count) {
 void ReadingBuffer::pruneUploaded() {
     xSemaphoreTake((SemaphoreHandle_t)_mutex, portMAX_DELAY);
 
-    if (_depth < PRUNE_THRESHOLD) {
+    if (_uploadedInBuffer == 0) {
         xSemaphoreGive((SemaphoreHandle_t)_mutex);
         return;
     }
@@ -443,7 +443,7 @@ void ReadingBuffer::pruneUploaded() {
 
     // Update counters — pruned readings were all uploaded
     _depth -= pruneCount;
-    _uploadedInBuffer -= pruneCount;
+    _uploadedInBuffer = (pruneCount >= _uploadedInBuffer) ? 0 : _uploadedInBuffer - pruneCount;
     _saveIndex();
 
     xSemaphoreGive((SemaphoreHandle_t)_mutex);

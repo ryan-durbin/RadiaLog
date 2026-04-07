@@ -112,6 +112,10 @@ main{max-width:720px;margin:0 auto;padding:1rem}
       <div class="card-title">Last Upload</div>
       <div class="card-value" style="font-size:1rem" id="last-upload">—</div>
     </div>
+    <div class="card-sm">
+      <div class="card-title">Lifetime Logged</div>
+      <div class="card-value" id="total-logged">—</div>
+    </div>
   </div>
 
   <p class="section-title">Power</p>
@@ -148,6 +152,10 @@ main{max-width:720px;margin:0 auto;padding:1rem}
       <div class="card-sm">
         <div class="card-title">Lifetime Readings</div>
         <div class="card-value" id="rm-lifetime">—</div>
+      </div>
+      <div class="card-sm">
+        <div class="card-title">Last Queried</div>
+        <div class="card-value" style="font-size:1rem" id="rm-last-queried">—</div>
       </div>
     </div>
   </div>
@@ -210,6 +218,7 @@ main{max-width:720px;margin:0 auto;padding:1rem}
         setText('buffer-pending', d.buffer_pending!=null?d.buffer_pending:'—');
         setText('buffer-total', d.buffer_total!=null?d.buffer_total:'—');
         setText('last-upload', d.last_upload||'Never');
+        setText('total-logged', d.total_readings_logged!=null?Number(d.total_readings_logged).toLocaleString():'—');
 
         // Battery
         var pct=d.battery_percent!=null?d.battery_percent:0;
@@ -225,14 +234,28 @@ main{max-width:720px;margin:0 auto;padding:1rem}
         // Uptime + time
         setText('uptime', d.uptime!=null?fmtUptime(d.uptime):'—');
         var synced=d.time_synced===true||d.time_synced===1;
-        setText('time-sync', synced?'NTP OK':'Not synced');
+        var src=d.time_sync_source||'';
+        setText('time-sync', synced?(src||'OK'):'Not synced');
         var tsEl=document.getElementById('time-sync');
         if(tsEl) tsEl.className='card-value '+(synced?'status-ok':'status-warn');
 
         // RadiaMaps
         setText('rm-username', d.rm_username||'—');
         setText('rm-subscription', d.rm_subscription||'—');
-        setText('rm-lifetime', d.rm_lifetime_readings!=null?d.rm_lifetime_readings:'—');
+        setText('rm-lifetime', d.rm_lifetime_readings!=null?Number(d.rm_lifetime_readings).toLocaleString():'—');
+        if(d.rm_last_queried){
+          var dt=new Date(d.rm_last_queried*1000);
+          var now=new Date();
+          var diffS=Math.floor((now-dt)/1000);
+          var ago;
+          if(diffS<60) ago=diffS+'s ago';
+          else if(diffS<3600) ago=Math.floor(diffS/60)+'m ago';
+          else if(diffS<86400) ago=Math.floor(diffS/3600)+'h ago';
+          else ago=Math.floor(diffS/86400)+'d ago';
+          setText('rm-last-queried', ago);
+        } else {
+          setText('rm-last-queried', '—');
+        }
 
         // Version
         var vi=document.getElementById('version-info');

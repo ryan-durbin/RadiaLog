@@ -3,8 +3,10 @@
 #include "wifi_mgr.h"
 #include "portal/debug_ws.h"
 #include <HTTPClient.h>
+#include <WiFiClientSecure.h>
 #include <ArduinoJson.h>
 #include <LittleFS.h>
+#include <Preferences.h>
 
 // =============================================================================
 // RadiaLog Firmware - Upload Manager Implementation
@@ -13,7 +15,8 @@
 // is a backlog of pending readings. Drains all pending readings in batches.
 // =============================================================================
 
-static const char* LAST_UPLOAD_PATH = "/last_upload.json";
+static const char* LAST_UPLOAD_PATH  = "/last_upload.json";
+static const char* ACCOUNT_INFO_PATH = "/account_info.json";
 
 Uploader::Uploader()
     : _buffer(nullptr)
@@ -26,6 +29,9 @@ Uploader::Uploader()
     , _lastUploadEpoch(0)
     , _jitterMinutes(0)
     , _uploadDueOnConnect(false)
+    , _serverUnreachableUntilMs(0)
+    , _lastAccountFetchMs(0)
+    , _accountRefreshFlag(false)
 {
 }
 
@@ -37,8 +43,9 @@ void Uploader::begin(const UploadConfig& config, ReadingBuffer* buffer, WifiMgr*
     // Random jitter: 0-59 minutes past midnight UTC for daily upload
     _jitterMinutes = static_cast<uint8_t>(esp_random() % 60);
 
-    // Load last upload time from LittleFS
+    // Load persisted state from LittleFS
     _loadLastUploadEpoch();
+    _loadAccountInfo();
 
     debugWS.log(MOD_UPLOAD, LVL_INFO,
         "[Uploader] Daily upload jitter: " + String(_jitterMinutes) + " min past midnight UTC");
@@ -51,6 +58,11 @@ void Uploader::begin(const UploadConfig& config, ReadingBuffer* buffer, WifiMgr*
         _uploadTask, "uploader", TASK_STACK_SIZE,
         this, TASK_PRIORITY, &_taskHandle, 0
     );
+}
+
+void Uploader::updateConfig(const UploadConfig& config) {
+    _config = config;
+    refreshAccountInfo();
 }
 
 void Uploader::forceUpload() {
@@ -78,8 +90,23 @@ unsigned long Uploader::getLastUploadTime() const {
     return _lastUploadTime;
 }
 
+time_t Uploader::getLastUploadEpoch() const {
+    return _lastUploadEpoch;
+}
+
 bool Uploader::isUploading() const {
     return _uploading;
+}
+
+const AccountInfo& Uploader::getAccountInfo() const {
+    return _accountInfo;
+}
+
+void Uploader::refreshAccountInfo() {
+    _accountRefreshFlag = true;
+    if (_taskHandle != nullptr) {
+        xTaskNotifyGive(_taskHandle);
+    }
 }
 
 // =============================================================================
@@ -101,10 +128,11 @@ bool Uploader::_isUploadDue() const {
     BufferStats stats = _buffer->getStats();
     if (stats.pending == 0) return false;
 
-    // Never uploaded — upload now
-    if (_lastUploadEpoch == 0) return true;
+    // First upload is handled by onWifiConnect() which sets _uploadDueOnConnect
+    // when the device has never uploaded.  No separate check needed here.
 
     // Check if we've crossed midnight UTC + jitter since last upload
+    if (_lastUploadEpoch == 0) return false;  // wait for onWifiConnect trigger
     struct tm tmNow;
     gmtime_r(&now, &tmNow);
 
@@ -136,16 +164,70 @@ void Uploader::_uploadTask(void* pvParameters) {
         // Wait for check interval or forceUpload() notification
         ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(CHECK_INTERVAL_MS));
 
-        // Only attempt upload if WiFi STA is connected and upload is due
+        bool forced = self->_forceFlag;
+        self->_forceFlag = false;
+
+        // Only attempt network operations if WiFi STA is connected
         if (self->_wifi != nullptr && self->_wifi->isSTAConnected()) {
-            if (self->_isUploadDue()) {
-                self->_forceFlag = false;
-                self->_runUploadCycle();
+            // Account info: refresh on flag, or every hour, or if never fetched
+            bool needAccountRefresh = self->_accountRefreshFlag
+                || !self->_accountInfo.valid
+                || (self->_lastAccountFetchMs > 0 &&
+                    (millis() - self->_lastAccountFetchMs) >= ACCOUNT_REFRESH_INTERVAL_MS);
+
+            if (needAccountRefresh && self->_config.device_token.length() > 0) {
+                self->_accountRefreshFlag = false;
+                self->_fetchAccountInfo();
+            }
+
+            if (forced || self->_isUploadDue()) {
+                // Manual force upload bypasses the server unreachable delay
+                if (forced) self->_serverUnreachableUntilMs = 0;
+
+                // If server was recently unreachable, wait until the delay expires
+                if (self->_serverUnreachableUntilMs > 0 && millis() < self->_serverUnreachableUntilMs) {
+                    debugWS.log(MOD_UPLOAD, LVL_INFO,
+                        "[Uploader] Server unreachable, retry in " +
+                        String((self->_serverUnreachableUntilMs - millis()) / 60000UL) + " min.");
+                } else {
+                    // Ping server before uploading to avoid hammering an offline server
+                    debugWS.log(MOD_UPLOAD, LVL_INFO, "[Uploader] Pinging server...");
+                    if (self->_pingServer()) {
+                        self->_serverUnreachableUntilMs = 0;
+                        self->_runUploadCycle();
+                    } else {
+                        self->_serverUnreachableUntilMs = millis() + SERVER_RETRY_DELAY_MS;
+                        debugWS.log(MOD_UPLOAD, LVL_WARN,
+                            "[Uploader] Server unreachable. Delaying uploads for 1 hour.");
+                    }
+                }
             }
         }
-
-        self->_forceFlag = false;
     }
+}
+
+// =============================================================================
+// Server reachability check — lightweight HEAD request before uploading
+// =============================================================================
+
+bool Uploader::_pingServer() {
+    if (_config.radiamaps_url.length() == 0) return false;
+
+    WiFiClientSecure client;
+    client.setInsecure();
+    client.setTimeout(10);
+
+    HTTPClient http;
+    http.setConnectTimeout(5000);
+    http.setTimeout(5000);
+    http.begin(client, _config.radiamaps_url);
+    http.addHeader("X-Device-Token", _config.device_token);
+
+    int httpCode = http.sendRequest("HEAD");
+    http.end();
+
+    // Any response from the server (even 4xx/5xx) means it's reachable
+    return httpCode > 0;
 }
 
 // =============================================================================
@@ -157,7 +239,13 @@ void Uploader::_runUploadCycle() {
 
     BufferStats stats = _buffer->getStats();
     if (stats.pending == 0) {
-        _uploadDueOnConnect = false;
+        return;
+    }
+
+    // Verify WiFi is still connected before starting
+    if (_wifi == nullptr || !_wifi->isSTAConnected()) {
+        debugWS.log(MOD_UPLOAD, LVL_WARN,
+            "[Uploader] WiFi not connected, skipping upload cycle.");
         return;
     }
 
@@ -170,35 +258,45 @@ void Uploader::_runUploadCycle() {
     uint32_t totalUploaded = 0;
 
     for (;;) {
+        // Check WiFi before each batch — bail out if connection dropped
+        if (_wifi == nullptr || !_wifi->isSTAConnected()) {
+            debugWS.log(MOD_UPLOAD, LVL_WARN,
+                "[Uploader] WiFi lost mid-cycle after " + String(totalUploaded) + " readings. Will retry.");
+            break;
+        }
+
         uint32_t count = _buffer->getUnuploaded(batch, MAX_BATCH_SIZE);
         if (count == 0) break;
-
-        // Build JSON payload
-        JsonDocument doc;
-        JsonArray readings = doc["readings"].to<JsonArray>();
 
         uint32_t* ids = new uint32_t[count];
         if (ids == nullptr) break;
 
-        for (uint32_t i = 0; i < count; i++) {
-            JsonObject obj = readings.add<JsonObject>();
-            obj["id"]               = batch[i].id;
-            obj["reading_time"]     = (unsigned long long)batch[i].timestamp * 1000ULL;
-            obj["latitude"]         = batch[i].lat;
-            obj["longitude"]        = batch[i].lon;
-            obj["dose_rate"]        = batch[i].dose_rate;
-            obj["count_rate"]       = batch[i].count_rate;
-            obj["altitude"]         = batch[i].altitude;
-            obj["speed_mph"]        = batch[i].speed_mph;
-            obj["speed_kph"]        = batch[i].speed_kph;
-            obj["heading"]          = batch[i].heading;
-            obj["accuracy"]         = batch[i].accuracy;
-            obj["altitude_accuracy"] = batch[i].altitude_accuracy;
-            ids[i] = batch[i].id;
-        }
-
+        // Build JSON payload in a nested scope so JsonDocument is freed
+        // before _postBatch allocates SSL buffers (~40-50KB).
         String jsonPayload;
-        serializeJson(doc, jsonPayload);
+        {
+            JsonDocument doc;
+            JsonArray readings = doc["readings"].to<JsonArray>();
+
+            for (uint32_t i = 0; i < count; i++) {
+                JsonObject obj = readings.add<JsonObject>();
+                obj["id"]               = batch[i].id;
+                obj["reading_time"]     = (unsigned long long)batch[i].timestamp * 1000ULL;
+                obj["latitude"]         = batch[i].lat;
+                obj["longitude"]        = batch[i].lon;
+                obj["dose_rate"]        = batch[i].dose_rate;
+                obj["count_rate"]       = batch[i].count_rate;
+                obj["altitude"]         = batch[i].altitude;
+                obj["speed_mph"]        = batch[i].speed_mph;
+                obj["speed_kph"]        = batch[i].speed_kph;
+                obj["heading"]          = batch[i].heading;
+                obj["accuracy"]         = batch[i].accuracy;
+                obj["altitude_accuracy"] = batch[i].altitude_accuracy;
+                ids[i] = batch[i].id;
+            }
+
+            serializeJson(doc, jsonPayload);
+        } // JsonDocument freed here — reclaims heap before SSL allocation
 
         _uploading = true;
         bool success = _postBatch(
@@ -208,12 +306,15 @@ void Uploader::_runUploadCycle() {
         _uploading = false;
 
         if (success) {
+            // Only mark readings as uploaded after confirmed server success
             _buffer->markUploaded(ids, count);
             _lastUploadTime = millis();
             _backoffMs = BACKOFF_INITIAL_MS;
             totalUploaded += count;
             delete[] ids;
         } else {
+            // Upload failed — do NOT mark or remove readings.
+            // They remain pending in the buffer for the next attempt.
             delete[] ids;
             vTaskDelay(pdMS_TO_TICKS(_backoffMs));
             if (_backoffMs < BACKOFF_MAX_MS) {
@@ -222,20 +323,28 @@ void Uploader::_runUploadCycle() {
             }
             delete[] batch;
             debugWS.log(MOD_UPLOAD, LVL_WARN,
-                "[Uploader] Batch failed after " + String(totalUploaded) + " readings. Will retry.");
+                "[Uploader] Batch failed after " + String(totalUploaded) + " readings uploaded. "
+                "Remaining readings preserved in buffer. Will retry.");
             return;
         }
     }
 
     delete[] batch;
 
-    // Record successful upload time
-    _lastUploadEpoch = time(nullptr);
-    _saveLastUploadEpoch();
-    _uploadDueOnConnect = false;
+    if (totalUploaded > 0) {
+        // Record successful upload time only after confirmed uploads
+        _lastUploadEpoch = time(nullptr);
+        _saveLastUploadEpoch();
 
-    debugWS.log(MOD_UPLOAD, LVL_INFO,
-        "[Uploader] Upload complete. " + String(totalUploaded) + " readings uploaded.");
+        // Clear the on-connect flag only after successful upload
+        _uploadDueOnConnect = false;
+
+        // Prune only readings that were confirmed uploaded by the server
+        _buffer->pruneUploaded();
+
+        debugWS.log(MOD_UPLOAD, LVL_INFO,
+            "[Uploader] Upload complete. " + String(totalUploaded) + " readings uploaded and pruned.");
+    }
 }
 
 // =============================================================================
@@ -245,28 +354,43 @@ void Uploader::_runUploadCycle() {
 bool Uploader::_postBatch(const uint8_t* jsonPayload, size_t len) {
     if (_config.radiamaps_url.length() == 0) return false;
 
+    WiFiClientSecure client;
+    client.setInsecure();   // Skip cert verification (ESP32 has no CA store)
+    client.setTimeout(15);  // 15 second TLS timeout
+
     HTTPClient http;
-    http.begin(_config.radiamaps_url);
+    http.setConnectTimeout(10000);  // 10s connect timeout
+    http.setTimeout(15000);         // 15s response timeout
+    http.begin(client, _config.radiamaps_url);
     http.addHeader("Content-Type", "application/json");
     http.addHeader("X-Device-Token", _config.device_token);
     http.addHeader("X-Device-Id", _config.device_id);
 
+    debugWS.log(MOD_UPLOAD, LVL_INFO,
+        "[Uploader] POST " + _config.radiamaps_url + " (" + String(len) + " bytes)");
+
     int httpCode = http.POST(const_cast<uint8_t*>(jsonPayload), len);
     bool success = false;
 
-    if (httpCode == HTTP_CODE_OK || httpCode == 202) {
+    if (httpCode > 0) {
         String response = http.getString();
-        JsonDocument responseDoc;
-        DeserializationError err = deserializeJson(responseDoc, response);
-        if (err == DeserializationError::Ok) {
-            // Server returns { accepted: N, errors: N } on 202
-            // or { success: true } on 200
-            if (responseDoc["accepted"].is<int>()) {
-                success = responseDoc["accepted"].as<int>() > 0;
-            } else {
-                success = responseDoc["success"].as<bool>();
+        debugWS.log(MOD_UPLOAD, LVL_INFO,
+            "[Uploader] HTTP " + String(httpCode) + ": " + response.substring(0, 200));
+
+        if (httpCode == HTTP_CODE_OK || httpCode == 202) {
+            JsonDocument responseDoc;
+            DeserializationError err = deserializeJson(responseDoc, response);
+            if (err == DeserializationError::Ok) {
+                if (responseDoc["accepted"].is<int>()) {
+                    success = responseDoc["accepted"].as<int>() > 0;
+                } else {
+                    success = responseDoc["success"].as<bool>();
+                }
             }
         }
+    } else {
+        debugWS.log(MOD_UPLOAD, LVL_ERROR,
+            "[Uploader] HTTP request failed: " + http.errorToString(httpCode));
     }
 
     http.end();
@@ -274,10 +398,126 @@ bool Uploader::_postBatch(const uint8_t* jsonPayload, size_t len) {
 }
 
 // =============================================================================
+// Account info — fetch from /api/radialog/verify and cache to LittleFS
+// =============================================================================
+
+bool Uploader::_fetchAccountInfo() {
+    if (_config.radiamaps_url.length() == 0) return false;
+
+    // Derive verify URL from upload URL: replace trailing "/upload" with "/verify"
+    String verifyUrl = _config.radiamaps_url;
+    if (verifyUrl.endsWith("/upload")) {
+        verifyUrl = verifyUrl.substring(0, verifyUrl.length() - 7) + "/verify";
+    } else {
+        // Fallback: append /verify to base
+        int lastSlash = verifyUrl.lastIndexOf('/');
+        if (lastSlash > 0) {
+            verifyUrl = verifyUrl.substring(0, lastSlash) + "/verify";
+        }
+    }
+
+    WiFiClientSecure client;
+    client.setInsecure();
+    client.setTimeout(15);
+
+    HTTPClient http;
+    http.setConnectTimeout(10000);
+    http.setTimeout(15000);
+    http.begin(client, verifyUrl);
+    http.addHeader("Content-Type", "application/json");
+    http.addHeader("X-Device-Token", _config.device_token);
+
+    debugWS.log(MOD_UPLOAD, LVL_INFO,
+        "[Uploader] Verifying token via " + verifyUrl);
+
+    int httpCode = http.POST("");
+    bool success = false;
+
+    if (httpCode > 0) {
+        String response = http.getString();
+        debugWS.log(MOD_UPLOAD, LVL_INFO,
+            "[Uploader] Verify HTTP " + String(httpCode) + ": " + response.substring(0, 200));
+
+        if (httpCode == HTTP_CODE_OK) {
+            JsonDocument responseDoc;
+            DeserializationError err = deserializeJson(responseDoc, response);
+            if (err == DeserializationError::Ok && responseDoc["username"].is<const char*>()) {
+                _accountInfo.username          = responseDoc["username"].as<String>();
+                _accountInfo.subscription      = responseDoc["subscription_status"].as<String>();
+
+                // Try multiple field names the server might use for lifetime readings
+                int64_t readings = -1;
+                if (responseDoc.containsKey("total_readings")) {
+                    readings = responseDoc["total_readings"].as<int64_t>();
+                } else if (responseDoc.containsKey("lifetime_readings")) {
+                    readings = responseDoc["lifetime_readings"].as<int64_t>();
+                } else if (responseDoc.containsKey("readings_count")) {
+                    readings = responseDoc["readings_count"].as<int64_t>();
+                }
+                _accountInfo.lifetime_readings = readings;
+
+                _accountInfo.last_queried      = time(nullptr);
+                _accountInfo.valid             = true;
+                _lastAccountFetchMs            = millis();
+                _saveAccountInfo();
+                success = true;
+
+                debugWS.log(MOD_UPLOAD, LVL_INFO,
+                    "[Uploader] Account verified: " + _accountInfo.username +
+                    " (" + _accountInfo.subscription +
+                    ") lifetime=" + String((int32_t)_accountInfo.lifetime_readings));
+            }
+        }
+    } else {
+        debugWS.log(MOD_UPLOAD, LVL_WARN,
+            "[Uploader] Verify request failed: " + http.errorToString(httpCode));
+    }
+
+    http.end();
+    return success;
+}
+
+void Uploader::_saveAccountInfo() {
+    JsonDocument doc;
+    doc["username"]          = _accountInfo.username;
+    doc["subscription"]      = _accountInfo.subscription;
+    doc["lifetime_readings"] = _accountInfo.lifetime_readings;
+    doc["last_queried"]      = static_cast<uint32_t>(_accountInfo.last_queried);
+
+    File f = LittleFS.open(ACCOUNT_INFO_PATH, "w");
+    if (f) {
+        serializeJson(doc, f);
+        f.close();
+    }
+}
+
+void Uploader::_loadAccountInfo() {
+    File f = LittleFS.open(ACCOUNT_INFO_PATH, "r");
+    if (!f) return;
+
+    JsonDocument doc;
+    DeserializationError err = deserializeJson(doc, f);
+    f.close();
+    if (err) return;
+
+    _accountInfo.username          = doc["username"].as<String>();
+    _accountInfo.subscription      = doc["subscription"].as<String>();
+    _accountInfo.lifetime_readings = doc["lifetime_readings"].as<int64_t>();
+    _accountInfo.last_queried      = static_cast<time_t>(doc["last_queried"].as<uint32_t>());
+    _accountInfo.valid             = _accountInfo.username.length() > 0;
+
+    if (_accountInfo.valid) {
+        debugWS.log(MOD_UPLOAD, LVL_INFO,
+            "[Uploader] Loaded cached account: " + _accountInfo.username);
+    }
+}
+
+// =============================================================================
 // Persist last upload time to LittleFS
 // =============================================================================
 
 void Uploader::_saveLastUploadEpoch() {
+    // Save to LittleFS (primary)
     JsonDocument doc;
     doc["epoch"] = static_cast<uint32_t>(_lastUploadEpoch);
 
@@ -286,16 +526,35 @@ void Uploader::_saveLastUploadEpoch() {
         serializeJson(doc, f);
         f.close();
     }
+
+    // Save to NVS (backup — survives LittleFS format)
+    Preferences prefs;
+    if (prefs.begin("radialog", false)) {
+        prefs.putULong("last_upload", static_cast<uint32_t>(_lastUploadEpoch));
+        prefs.end();
+    }
 }
 
 void Uploader::_loadLastUploadEpoch() {
+    // Try LittleFS first
     File f = LittleFS.open(LAST_UPLOAD_PATH, "r");
-    if (!f) return;
+    if (f) {
+        JsonDocument doc;
+        DeserializationError err = deserializeJson(doc, f);
+        f.close();
+        if (!err) {
+            _lastUploadEpoch = static_cast<time_t>(doc["epoch"].as<uint32_t>());
+            return;
+        }
+    }
 
-    JsonDocument doc;
-    DeserializationError err = deserializeJson(doc, f);
-    f.close();
-    if (err) return;
-
-    _lastUploadEpoch = static_cast<time_t>(doc["epoch"].as<uint32_t>());
+    // Fallback to NVS
+    Preferences prefs;
+    if (prefs.begin("radialog", true)) {
+        uint32_t epoch = prefs.getULong("last_upload", 0);
+        prefs.end();
+        if (epoch > 0) {
+            _lastUploadEpoch = static_cast<time_t>(epoch);
+        }
+    }
 }

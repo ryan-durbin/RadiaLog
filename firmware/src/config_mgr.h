@@ -62,6 +62,12 @@ public:
     String  getBleDeviceMac(int i) const;
     void    setBleDevices(const std::vector<String>& macs);
 
+    // --- Lifetime reading counter (NVS-persisted, survives firmware updates) ---
+    uint64_t getTotalReadingsLogged() const;
+    void     incrementTotalReadingsLogged();
+    void     flushTotalReadingsLogged();   ///< Force-write to NVS now
+
+
     /// Save critical settings to NVS (survives firmware flashing).
     bool saveToNVS();
 
@@ -85,6 +91,11 @@ private:
     std::vector<String> _bleDeviceMacs;
     uint16_t _displayTimeoutSec;
     bool     _buttonWakeEnabled;
+
+    // Lifetime counter — batched NVS writes to reduce flash wear
+    uint64_t      _totalReadingsLogged;
+    uint32_t      _readingsSinceFlush;   ///< Counts since last NVS write
+    static constexpr uint32_t FLUSH_INTERVAL = 100; ///< Write to NVS every N readings
 };
 
 #endif // CONFIG_MGR_H

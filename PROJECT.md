@@ -12,13 +12,12 @@ No phone needed. No app. Just power, detect, log, upload.
 
 | Component | Role | Interface |
 |-----------|------|-----------|
-| **XIAO ESP32S3** | Brain. USB Host + WiFi + UART + I2C | — |
-| **Wio-SX1262 carrier** | Carrier board (LoRa reserved for future) | SPI (to ESP32S3) |
-| **RadiaCode-10x** | Radiation detector (dose rate, count rate) | **USB** (Host mode) |
+| **XIAO ESP32S3 PLUS** | Brain. USB Host + WiFi + UART + I2C | — |
+| **RadiaCode-10x** | Radiation detector (dose rate, count rate) | **USB** (Host mode), **Bluetooth**|
 | **ATGM336H GPS** | Lat/lon/altitude/speed/heading (v1) | UART (9600 baud) |
-| **Battery / LiPo** | Portable power (Wio-SX1262 has charge management) | BAT pins |
+| **Battery / LiPo** | Portable power (XIAO ESP32S3 PLUS has charge management) | BAT pins |
 
-### Board: XIAO ESP32S3 + Wio-SX1262
+### Board: XIAO ESP32S3 PLUS
 
 Chosen for compactness (21 x 18mm). ESP32-S3R8 dual-core 240MHz, 8MB PSRAM, WiFi + BLE 5.0, built-in LiPo charge management, I2C/UART/GPIO breakout. The Wio-SX1262 adds LoRa (reserved for future mesh/long-range features).
 

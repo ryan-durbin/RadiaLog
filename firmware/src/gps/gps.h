@@ -41,6 +41,17 @@ public:
     /// Number of satellites in use
     virtual int getSatellites() const = 0;
 
+    /// Returns true if the GPS has a valid UTC date+time from NMEA.
+    virtual bool hasValidTime() const { return false; }
+
+    /// UTC time components (valid only if hasValidTime())
+    virtual uint16_t getYear() const { return 0; }
+    virtual uint8_t  getMonth() const { return 0; }
+    virtual uint8_t  getDay() const { return 0; }
+    virtual uint8_t  getHour() const { return 0; }
+    virtual uint8_t  getMinute() const { return 0; }
+    virtual uint8_t  getSecond() const { return 0; }
+
     /// Inject approximate time for A-GPS (UTC). No-op if unsupported.
     virtual void injectTime(uint16_t year, uint8_t month, uint8_t day,
                             uint8_t hour, uint8_t min, uint8_t sec) { (void)year; (void)month; (void)day; (void)hour; (void)min; (void)sec; }

@@ -31,6 +31,14 @@ public:
     float getAccuracy() const override;
     int getSatellites() const override;
 
+    bool hasValidTime() const override;
+    uint16_t getYear() const override;
+    uint8_t  getMonth() const override;
+    uint8_t  getDay() const override;
+    uint8_t  getHour() const override;
+    uint8_t  getMinute() const override;
+    uint8_t  getSecond() const override;
+
     void injectTime(uint16_t year, uint8_t month, uint8_t day,
                     uint8_t hour, uint8_t min, uint8_t sec) override;
     void injectPosition(double lat, double lon, float altM) override;
@@ -38,7 +46,7 @@ public:
 private:
     void _sendCommand(const String& cmd);
     HardwareSerial& _serial;
-    TinyGPSPlus     _gps;
+    mutable TinyGPSPlus _gps;
     int      _txPin;
     int      _rxPin;
     uint32_t _baud;
