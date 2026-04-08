@@ -80,11 +80,15 @@ bool ReadingBuffer::begin() {
         }
     }
 
-    // Count currently-uploaded readings in the status file
+    // Reconcile _depth with actual status file size (they can diverge after a crash)
     _uploadedInBuffer = 0;
     if (LittleFS.exists(STATUS_FILE) && _depth > 0) {
         File sf = LittleFS.open(STATUS_FILE, "r");
         if (sf) {
+            uint32_t actualDepth = sf.size();
+            if (actualDepth != _depth) {
+                _depth = actualDepth;
+            }
             while (sf.available()) {
                 uint8_t status;
                 if (sf.read(&status, 1) != 1) break;
@@ -438,7 +442,7 @@ void ReadingBuffer::pruneUploaded() {
     LittleFS.rename("/status_tmp.bin", STATUS_FILE);
 
     // Update counters — pruned readings were all uploaded
-    _depth -= pruneCount;
+    _depth = (pruneCount >= _depth) ? 0 : _depth - pruneCount;
     _uploadedInBuffer = (pruneCount >= _uploadedInBuffer) ? 0 : _uploadedInBuffer - pruneCount;
     _saveIndex();
 
