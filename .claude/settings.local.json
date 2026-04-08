@@ -5,8 +5,15 @@
       "Bash(git add:*)",
       "Bash(git commit -m ':*)",
       "Bash(git submodule:*)",
-      "Bash(curl -sL --max-time 30 \"https://docs.heltec.org/en/node/esp32/wireless_tracker/frequently_asked_questions.html\")",
-      "Bash(curl:*)"
+      "Read(//etc/nginx/**)",
+      "Read(//etc/**)",
+      "Bash(curl:*)",
+      "Bash(grep -E \"\\\\.\\(h|cpp|json\\)$\")",
+      "WebSearch",
+      "WebFetch(domain:wiki.seeedstudio.com)",
+      "WebFetch(domain:forum.seeedstudio.com)",
+      "Bash(grep -E \"\\\\.\\(cpp|h\\)$\")",
+      "Bash(wc:*)"
     ]
   }
 }
