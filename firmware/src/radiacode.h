@@ -164,6 +164,7 @@ public:
 
 private:
     bool _connected;
+    bool _hostInstalled;        // USB Host driver is installed and client registered
     uint8_t _seq;               // 0-31, increments on each buildRequest()
     uint32_t _base_time;        // Unix seconds; set in init() = now() + 128s
 
@@ -193,7 +194,10 @@ private:
     // Claim the bulk interface and configure endpoints.
     Error claimInterface();
 
-    // Release USB Host resources.
+    // Release device-level resources (transfers, device handle) but keep host installed.
+    void releaseDevice();
+
+    // Release USB Host driver and client (full teardown).
     void releaseUsbHost();
 
     // Helper: pack a uint32_t into 4 little-endian bytes.

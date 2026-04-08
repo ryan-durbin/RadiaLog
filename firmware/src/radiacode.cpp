@@ -57,6 +57,7 @@ uint32_t RadiaCode::unpackLE32(const uint8_t* buf) {
 
 RadiaCode::RadiaCode()
     : _connected(false)
+    , _hostInstalled(false)
     , _seq(0)
     , _base_time(0)
     , _client_hdl(nullptr)
@@ -79,20 +80,25 @@ Error RadiaCode::connect() {
         return Error::OK;
     }
 
-    Error err = initUsbHost();
-    if (err != Error::OK) {
-        return err;
+    // Install USB Host driver once and keep it running so hot-plug works
+    if (!_hostInstalled) {
+        Error err = initUsbHost();
+        if (err != Error::OK) {
+            return err;
+        }
+        _hostInstalled = true;
     }
 
-    err = findAndOpenDevice();
+    Error err = findAndOpenDevice();
     if (err != Error::OK) {
-        releaseUsbHost();
+        // Don't tear down the host — leave it installed for hot-plug detection
         return err;
     }
 
     err = claimInterface();
     if (err != Error::OK) {
-        releaseUsbHost();
+        // Release device-level resources but keep host installed
+        releaseDevice();
         return err;
     }
 
@@ -106,11 +112,10 @@ Error RadiaCode::connect() {
 }
 
 void RadiaCode::disconnect() {
-    if (!_connected && _client_hdl == nullptr) {
-        return;
-    }
     _connected = false;
+    releaseDevice();
     releaseUsbHost();
+    _hostInstalled = false;
 }
 
 bool RadiaCode::init() {
@@ -533,8 +538,16 @@ Error RadiaCode::initUsbHost() {
 
 Error RadiaCode::findAndOpenDevice() {
 #ifdef ARDUINO
-    // Wait briefly for device enumeration
-    vTaskDelay(pdMS_TO_TICKS(500));
+    // Process USB host events to allow device enumeration (hot-plug).
+    // Without these calls the USB stack never detects newly connected devices.
+    for (int i = 0; i < 10; i++) {
+        usb_host_lib_handle_events(0, nullptr);
+        if (_client_hdl) {
+            usb_host_client_handle_events(
+                reinterpret_cast<usb_host_client_handle_t>(_client_hdl), 0);
+        }
+        vTaskDelay(pdMS_TO_TICKS(50));
+    }
 
     // Get the list of connected device addresses
     uint8_t dev_addr_list[10] = {0};
@@ -624,7 +637,7 @@ Error RadiaCode::claimInterface() {
 #endif
 }
 
-void RadiaCode::releaseUsbHost() {
+void RadiaCode::releaseDevice() {
 #ifdef ARDUINO
     if (_out_xfer) {
         usb_host_transfer_free(reinterpret_cast<usb_transfer_t*>(_out_xfer));
@@ -640,6 +653,15 @@ void RadiaCode::releaseUsbHost() {
             reinterpret_cast<usb_device_handle_t>(_dev_hdl));
         _dev_hdl = nullptr;
     }
+#else
+    _out_xfer = nullptr;
+    _in_xfer = nullptr;
+    _dev_hdl = nullptr;
+#endif
+}
+
+void RadiaCode::releaseUsbHost() {
+#ifdef ARDUINO
     if (_xfer_semaphore) {
         vSemaphoreDelete((SemaphoreHandle_t)_xfer_semaphore);
         _xfer_semaphore = nullptr;
@@ -651,9 +673,6 @@ void RadiaCode::releaseUsbHost() {
         usb_host_uninstall();
     }
 #else
-    _out_xfer = nullptr;
-    _in_xfer = nullptr;
-    _dev_hdl = nullptr;
     _client_hdl = nullptr;
 #endif
 }
