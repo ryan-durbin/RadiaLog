@@ -197,7 +197,7 @@ X-Device-Token: <device_auth_token>
 {
   "success": true,
   "user": {
-    "username": "rymn_rd",
+    "username": "ryan",
     "nickname": "Ryan",
     "user_id": 42,
     "member_since": "2025-06-15T00:00:00Z",
@@ -375,36 +375,35 @@ RadiaLog/
 ## Phases
 
 ### Phase 1: USB Protocol & Proof of Concept
-- [ ] Port RadiaCode USB protocol to C++ (transport layer + init sequence)
-- [ ] ESP32-S3 USB Host connects to RadiaCode, reads DATA_BUF
-- [ ] Decode RealTimeData records (dose_rate, count_rate)
-- [ ] ATGM336H GPS connected via UART, reads lat/lon
-- [ ] Readings printed to UART serial console (via FTDI)
-- [ ] Verify USB Host works on XIAO ESP32S3 with OTG adapter
+- [x] Port RadiaCode USB protocol to C++ (transport layer + init sequence)
+- [x] ESP32-S3 USB Host connects to RadiaCode, reads DATA_BUF
+- [x] Decode RealTimeData records (dose_rate, count_rate)
+- [x] ATGM336H GPS connected via UART, reads lat/lon
+- [x] Readings printed to UART serial console (via FTDI)
+- [x] Verify USB Host works on XIAO ESP32S3 with OTG adapter
 
 ### Phase 2: Buffer & Upload
-- [ ] LittleFS reading buffer (persist across power cycles)
-- [ ] AP+STA dual WiFi mode
-- [ ] Batch upload buffered readings on STA connect
-- [ ] Mark uploaded readings, don't re-upload
-- [ ] Track stats: buffer depth, lifetime logged, lifetime uploaded
-- [ ] Status LED feedback
-- [ ] **RadiaMaps: new `/api/radialog/upload` route + device token system**
+- [x] LittleFS reading buffer (persist across power cycles)
+- [x] AP+STA dual WiFi mode
+- [x] Batch upload buffered readings on STA connect
+- [x] Mark uploaded readings, don't re-upload
+- [x] Track stats: buffer depth, lifetime logged, lifetime uploaded
+- [x] Status LED feedback
+- [x] **RadiaMaps: new `/api/radialog/upload` route + device token system**
 
 ### Phase 3: Status Portal
-- [ ] Web server on AP interface (ESPAsyncWebServer)
-- [ ] Dashboard page (live stats, buffer status, upload status)
-- [ ] Debug console page (WebSocket log streaming)
-- [ ] Settings page (WiFi, auth token, device config)
-- [ ] Data view page (recent readings, mini chart, CSV export)
-- [ ] Action buttons (force upload, clear buffer, reboot, OTA)
+- [x] Web server on AP interface (ESPAsyncWebServer)
+- [x] Dashboard page (live stats, buffer status, upload status)
+- [x] Debug console page (WebSocket log streaming)
+- [x] Settings page (WiFi, auth token, device config)
+- [x] Data view page (recent readings, mini chart, CSV export)
+- [x] Action buttons (force upload, clear buffer, reboot, OTA)
 
 ### Phase 4: Polish & Production
-- [ ] Multiple GPS module support (driver abstraction tested with 2+ modules)
-- [ ] Power optimization (deep sleep between readings when stationary)
-- [ ] Battery voltage monitoring + display on portal
-- [ ] Enclosure design (3D printed, compact)
-- [ ] LoRa integration via Wio-SX1262 (mesh radiation data sharing, future)
+- [x] Multiple GPS module support (driver abstraction tested with 2+ modules)
+- [x] Power optimization (deep sleep via shipping mode, long-press GPIO0)
+- [x] Battery voltage monitoring + display on portal
+- [x] Enclosure design (3D printed, compact)
 - [ ] RadiaMaps: device management page (see all registered devices, last seen, upload history)
 
 ## Open Questions
@@ -417,10 +416,8 @@ RadiaLog/
 
 ## Dependencies / Prerequisites
 
-- [x] XIAO ESP32S3 + Wio-SX1262 kit (Ryan has this)
-- [ ] ATGM336H GPS module
-- [ ] USB-C OTG adapter/cable (ESP32 → RadiaCode)
-- [ ] FTDI USB-to-UART adapter (development only)
-- [ ] RadiaCode device for testing
-- [ ] LiPo battery
-- [ ] **RadiaMaps: `/api/radialog/upload` route + device token system**
+- [x] XIAO ESP32S3 plus
+- [x] ATGM336H GPS module
+- [x] RadiaCode device for testing
+- [x] LiPo/LiOn battery
+- [x] **RadiaMaps: `/api/radialog/upload` route + device token system**
