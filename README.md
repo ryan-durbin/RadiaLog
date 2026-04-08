@@ -4,7 +4,7 @@
 
 **Standalone ESP32-S3 datalogger for RadiaCode radiation detectors with GPS and WiFi.**
 
-Connect to a RadiaCode via USB or Bluetooth and RadiaLog automatically logs dose rate and count rate paired with GPS coordinates, then uploads everything to [RadiaMaps.com](https://radiamaps.com) over WiFi. No phone app required.
+Connect to a RadiaCode via Bluetooth and RadiaLog automatically logs dose rate and count rate paired with GPS coordinates, then uploads everything to [RadiaMaps.com](https://radiamaps.com) over WiFi. No phone app required.
 
 ![RadiaLog Device](docs/images/radialog-device.jpg)
 <!-- TODO: Add device photos -->
@@ -14,13 +14,13 @@ Connect to a RadiaCode via USB or Bluetooth and RadiaLog automatically logs dose
 
 ## Features
 
-- **Automatic logging** - Polls RadiaCode every ~2s via USB Host, records dose rate (uSv/h) + count rate (CPS) with GPS coordinates
+- **Automatic logging** - Polls RadiaCode every ~2s via Bluetooth, records dose rate (uSv/h) + count rate (CPS) with GPS coordinates
 - **Power-fail safe** - Readings stored in LittleFS flash buffer; survives unplugging at any time
 - **WiFi dual-mode** - Hosts local `RadiaLog-XXXX` access point while connecting to WiFi for cloud uploads
 - **Web portal** - Dashboard, settings, data export (CSV), and live debug console at `192.168.4.1`
 - **Batch upload** - Sends up to 250 readings per request to RadiaMaps with exponential backoff retry
-- **BLE support** - Connect up to 4 additional RadiaCode devices via Bluetooth simultaneously
-- **OTA updates** - After initial USB flash, update firmware through the web portal
+- **Multi-detector** - Connect up to 4 RadiaCode devices via Bluetooth simultaneously
+- **OTA updates** - Update firmware over-the-air through the web portal
 - **Multi-board** - Supports 5 ESP32-S3 boards with various displays
 
 ## Hardware
@@ -81,7 +81,7 @@ pio device monitor -b 115200
 2. Connect your phone/laptop to the `RadiaLog-XXXX` WiFi network
 3. Open `http://192.168.4.1` in a browser
 4. Configure your home WiFi and RadiaMaps token in Settings
-5. Plug RadiaLog into your RadiaCode's USB-C port - logging starts automatically
+5. Power on your RadiaCode — RadiaLog connects via Bluetooth and logging starts automatically
 
 ## Web Portal
 
@@ -95,7 +95,7 @@ The portal is always accessible at `http://192.168.4.1` on the RadiaLog access p
 ## Architecture
 
 ```
-RadiaCode (USB) ──> ESP32-S3 ──> LittleFS Buffer ──> WiFi Upload ──> RadiaMaps.com
+RadiaCode (BLE) ──> ESP32-S3 ──> LittleFS Buffer ──> WiFi Upload ──> RadiaMaps.com
                        |
 GPS Module ────────────┘
                        |
@@ -112,8 +112,8 @@ firmware/
 └── src/
     ├── main.cpp            # Entry point
     ├── config.h            # Per-board pin definitions
-    ├── radiacode.h/cpp     # USB Host protocol
-    ├── radiacode_mgr.h/cpp # Multi-device manager (USB + BLE)
+    ├── radiacode.h/cpp     # RadiaCode BLE protocol
+    ├── radiacode_mgr.h/cpp # Multi-device BLE manager
     ├── gps/                # GPS drivers (ATGM336H, LC76G)
     ├── buffer.h/cpp        # LittleFS reading storage
     ├── uploader.h/cpp      # Cloud upload manager
