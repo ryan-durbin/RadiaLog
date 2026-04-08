@@ -115,6 +115,14 @@ void setup() {
         BufferStats stats = readingBuffer.getStats();
         debugWS.log(MOD_BUFFER, LVL_INFO, "[RadiaLog] Buffer ready. Stored: " + String(stats.depth)
             + ", pending: " + String(stats.pending));
+
+        // Seed lifetime counter from buffer if NVS counter is behind
+        // (e.g. counter added after device already had readings)
+        if (configMgr.getTotalReadingsLogged() < stats.lifetimeLogged) {
+            configMgr.setTotalReadingsLogged(stats.lifetimeLogged);
+            configMgr.flushTotalReadingsLogged();
+            debugWS.log(MOD_BUFFER, LVL_INFO, "[RadiaLog] Seeded lifetime counter from buffer: " + String(stats.lifetimeLogged));
+        }
     }
 
     // 5. Initialize WiFi (AP + STA)
@@ -415,6 +423,7 @@ void loop() {
         ds.gpsFix         = locationValid;
         ds.gpsSats        = gps.getSatellites();
         ds.timeSyncSource = timeSyncSource;
+        ds.uploadEnabled  = configMgr.getToken().length() > 0;
         ds.loopCount      = loopCounter;
 
         display.draw(ds);

@@ -1,6 +1,7 @@
 #include "config_mgr.h"
 #include <LittleFS.h>
 #include <ArduinoJson.h>
+#include <WiFi.h>
 
 // =============================================================================
 // RadiaLog Firmware - ConfigMgr Implementation
@@ -11,11 +12,19 @@
 static const char* CONFIG_FILE   = "/config.json";
 static const char* NVS_NAMESPACE = "radialog";
 
+static String buildDefaultDeviceId() {
+    uint8_t mac[6];
+    WiFi.macAddress(mac);
+    char suffix[5];
+    snprintf(suffix, sizeof(suffix), "%02X%02X", mac[4], mac[5]);
+    return String("RadiaLog-") + suffix;
+}
+
 ConfigMgr::ConfigMgr()
     : _wifiCount(0)
     , _token("")
     , _uploadUrl("https://radiamaps.com/api/radialog/upload")
-    , _deviceId("RadiaLog-0001")
+    , _deviceId(buildDefaultDeviceId())
     , _deviceName("RadiaLog")
     , _readingIntervalMs(2000)
     , _apPassword("")
@@ -398,6 +407,11 @@ void ConfigMgr::setButtonWakeEnabled(bool enabled) {
 
 uint64_t ConfigMgr::getTotalReadingsLogged() const {
     return _totalReadingsLogged;
+}
+
+void ConfigMgr::setTotalReadingsLogged(uint64_t count) {
+    _totalReadingsLogged = count;
+    _readingsSinceFlush = 1;  // Mark dirty so flush will write
 }
 
 void ConfigMgr::incrementTotalReadingsLogged() {

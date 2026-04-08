@@ -33,6 +33,7 @@ struct DisplayStatus {
     bool     gpsFix;
     int      gpsSats;
     String   timeSyncSource;    ///< "" = not synced, "NTP", "GPS"
+    bool     uploadEnabled;     ///< false when no device token is configured
     uint32_t loopCount;         ///< Main loop iteration counter (debug)
 };
 

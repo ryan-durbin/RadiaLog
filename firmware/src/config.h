@@ -51,7 +51,7 @@
 // No display on this board
 
 // =============================================================================
-// Board: Seeed XIAO ESP32S3 Plus (no display, built-in battery voltage divider)
+// Board: Seeed XIAO ESP32S3 Plus (no display, external battery voltage divider)
 // =============================================================================
 #elif defined(BOARD_XIAO_ESP32S3_PLUS)
 
@@ -64,9 +64,8 @@
 // Status LED (built-in, GPIO21)
 #define LED_PIN         21
 
-// Battery ADC (built-in gated voltage divider: GPIO6 enables, A0 reads)
-#define BATTERY_ADC_PIN           1
-#define BATTERY_ADC_ENABLE_PIN    6
+// Battery ADC (ADC_BAT on GPIO10, requires external voltage divider)
+#define BATTERY_ADC_PIN           10
 #define BATTERY_DIVIDER_RATIO     2.0f
 
 // No display on this board

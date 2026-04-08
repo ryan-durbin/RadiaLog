@@ -360,11 +360,17 @@ void Display::_drawRectangular(const DisplayStatus& s) {
     fb.drawString(pendStr, rightX - fb.textWidth(pendStr), iy);
     iy += rowH;
 
-    // Last upload
+    // Last upload (or "No Token" warning if uploads disabled)
     fb.setTextColor(COL_LABEL, COL_BG);
     fb.drawString("Upload", margin, iy);
-    fb.setTextColor(COL_VALUE, COL_BG);
-    fb.drawString(s.lastUpload, rightX - fb.textWidth(s.lastUpload), iy);
+    if (!s.uploadEnabled) {
+        fb.setTextColor(COL_RED, COL_BG);
+        String noTok = "No Token";
+        fb.drawString(noTok, rightX - fb.textWidth(noTok), iy);
+    } else {
+        fb.setTextColor(COL_VALUE, COL_BG);
+        fb.drawString(s.lastUpload, rightX - fb.textWidth(s.lastUpload), iy);
+    }
     iy += rowH;
 
     // Lifetime readings logged
@@ -551,12 +557,18 @@ void Display::_drawCircular(const DisplayStatus& s) {
     fb.drawString(storedStr, rgtX - fb.textWidth(storedStr), iy);
     iy += rowH;
 
-    // Pending
+    // Pending (or "No Token" if uploads disabled)
     fb.setTextColor(COL_LABEL, COL_BG);
     fb.drawString("Pending", leftX, iy);
-    fb.setTextColor(s.pendingReadings > 0 ? COL_YELLOW : COL_GREEN, COL_BG);
-    String pendStr = String(s.pendingReadings);
-    fb.drawString(pendStr, rgtX - fb.textWidth(pendStr), iy);
+    if (!s.uploadEnabled) {
+        fb.setTextColor(COL_RED, COL_BG);
+        String noTok = "No Token";
+        fb.drawString(noTok, rgtX - fb.textWidth(noTok), iy);
+    } else {
+        fb.setTextColor(s.pendingReadings > 0 ? COL_YELLOW : COL_GREEN, COL_BG);
+        String pendStr = String(s.pendingReadings);
+        fb.drawString(pendStr, rgtX - fb.textWidth(pendStr), iy);
+    }
     iy += rowH;
 
     // Logged

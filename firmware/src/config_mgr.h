@@ -64,6 +64,7 @@ public:
 
     // --- Lifetime reading counter (NVS-persisted, survives firmware updates) ---
     uint64_t getTotalReadingsLogged() const;
+    void     setTotalReadingsLogged(uint64_t count);
     void     incrementTotalReadingsLogged();
     void     flushTotalReadingsLogged();   ///< Force-write to NVS now
 
