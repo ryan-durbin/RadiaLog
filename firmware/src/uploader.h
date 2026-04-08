@@ -55,6 +55,9 @@ public:
     /// Returns true if an upload HTTP request is currently in progress.
     bool isUploading() const;
 
+    /// Returns Unix epoch of the next scheduled upload, or 0 if unknown.
+    time_t getNextUploadEpoch() const;
+
     /// Returns cached RadiaMaps account info.
     const AccountInfo& getAccountInfo() const;
 

@@ -98,6 +98,28 @@ bool Uploader::isUploading() const {
     return _uploading;
 }
 
+time_t Uploader::getNextUploadEpoch() const {
+    time_t now = time(nullptr);
+    if (now < 1000000000) return 0;  // NTP not synced
+
+    struct tm tmNow;
+    gmtime_r(&now, &tmNow);
+
+    // Today's target: midnight UTC + jitter
+    struct tm tmTarget = tmNow;
+    tmTarget.tm_hour = 0;
+    tmTarget.tm_min  = _jitterMinutes;
+    tmTarget.tm_sec  = 0;
+    time_t todayTarget = mktime(&tmTarget);
+
+    // If we haven't passed today's target yet, that's the next upload
+    if (now < todayTarget) return todayTarget;
+
+    // Otherwise, tomorrow's target
+    tmTarget.tm_mday += 1;
+    return mktime(&tmTarget);
+}
+
 const AccountInfo& Uploader::getAccountInfo() const {
     return _accountInfo;
 }
@@ -181,24 +203,32 @@ void Uploader::_uploadTask(void* pvParameters) {
             }
 
             if (forced || self->_isUploadDue()) {
-                // Manual force upload bypasses the server unreachable delay
-                if (forced) self->_serverUnreachableUntilMs = 0;
-
-                // If server was recently unreachable, wait until the delay expires
-                if (self->_serverUnreachableUntilMs > 0 && millis() < self->_serverUnreachableUntilMs) {
-                    debugWS.log(MOD_UPLOAD, LVL_INFO,
-                        "[Uploader] Server unreachable, retry in " +
-                        String((self->_serverUnreachableUntilMs - millis()) / 60000UL) + " min.");
-                } else {
-                    // Ping server before uploading to avoid hammering an offline server
-                    debugWS.log(MOD_UPLOAD, LVL_INFO, "[Uploader] Pinging server...");
-                    if (self->_pingServer()) {
-                        self->_serverUnreachableUntilMs = 0;
-                        self->_runUploadCycle();
-                    } else {
-                        self->_serverUnreachableUntilMs = millis() + SERVER_RETRY_DELAY_MS;
+                // Skip uploads entirely if no device token is configured
+                if (self->_config.device_token.length() == 0) {
+                    if (forced) {
                         debugWS.log(MOD_UPLOAD, LVL_WARN,
-                            "[Uploader] Server unreachable. Delaying uploads for 1 hour.");
+                            "[Uploader] No device token configured. Uploads disabled.");
+                    }
+                } else {
+                    // Manual force upload bypasses the server unreachable delay
+                    if (forced) self->_serverUnreachableUntilMs = 0;
+
+                    // If server was recently unreachable, wait until the delay expires
+                    if (self->_serverUnreachableUntilMs > 0 && millis() < self->_serverUnreachableUntilMs) {
+                        debugWS.log(MOD_UPLOAD, LVL_INFO,
+                            "[Uploader] Server unreachable, retry in " +
+                            String((self->_serverUnreachableUntilMs - millis()) / 60000UL) + " min.");
+                    } else {
+                        // Ping server before uploading to avoid hammering an offline server
+                        debugWS.log(MOD_UPLOAD, LVL_INFO, "[Uploader] Pinging server...");
+                        if (self->_pingServer()) {
+                            self->_serverUnreachableUntilMs = 0;
+                            self->_runUploadCycle();
+                        } else {
+                            self->_serverUnreachableUntilMs = millis() + SERVER_RETRY_DELAY_MS;
+                            debugWS.log(MOD_UPLOAD, LVL_WARN,
+                                "[Uploader] Server unreachable. Delaying uploads for 1 hour.");
+                        }
                     }
                 }
             }
@@ -380,13 +410,26 @@ bool Uploader::_postBatch(const uint8_t* jsonPayload, size_t len) {
         if (httpCode == HTTP_CODE_OK || httpCode == 202) {
             JsonDocument responseDoc;
             DeserializationError err = deserializeJson(responseDoc, response);
-            if (err == DeserializationError::Ok) {
-                if (responseDoc["accepted"].is<int>()) {
-                    success = responseDoc["accepted"].as<int>() > 0;
-                } else {
-                    success = responseDoc["success"].as<bool>();
+            if (err != DeserializationError::Ok) {
+                debugWS.log(MOD_UPLOAD, LVL_ERROR,
+                    "[Uploader] JSON parse error: " + String(err.c_str()));
+            } else if (responseDoc["accepted"].is<int>()) {
+                int accepted = responseDoc["accepted"].as<int>();
+                success = accepted > 0;
+                if (!success) {
+                    debugWS.log(MOD_UPLOAD, LVL_WARN,
+                        "[Uploader] Server accepted 0 readings. Response: " + response.substring(0, 200));
+                }
+            } else {
+                success = responseDoc["success"].as<bool>();
+                if (!success) {
+                    debugWS.log(MOD_UPLOAD, LVL_WARN,
+                        "[Uploader] Server returned success=false. Response: " + response.substring(0, 200));
                 }
             }
+        } else {
+            debugWS.log(MOD_UPLOAD, LVL_WARN,
+                "[Uploader] Server returned HTTP " + String(httpCode) + " (expected 200/202)");
         }
     } else {
         debugWS.log(MOD_UPLOAD, LVL_ERROR,
@@ -404,16 +447,10 @@ bool Uploader::_postBatch(const uint8_t* jsonPayload, size_t len) {
 bool Uploader::_fetchAccountInfo() {
     if (_config.radiamaps_url.length() == 0) return false;
 
-    // Derive verify URL from upload URL: replace trailing "/upload" with "/verify"
+    // Derive verify URL from configured upload URL by replacing trailing /upload with /verify
     String verifyUrl = _config.radiamaps_url;
     if (verifyUrl.endsWith("/upload")) {
         verifyUrl = verifyUrl.substring(0, verifyUrl.length() - 7) + "/verify";
-    } else {
-        // Fallback: append /verify to base
-        int lastSlash = verifyUrl.lastIndexOf('/');
-        if (lastSlash > 0) {
-            verifyUrl = verifyUrl.substring(0, lastSlash) + "/verify";
-        }
     }
 
     WiFiClientSecure client;
@@ -436,11 +473,18 @@ bool Uploader::_fetchAccountInfo() {
     if (httpCode > 0) {
         String response = http.getString();
         debugWS.log(MOD_UPLOAD, LVL_INFO,
-            "[Uploader] Verify HTTP " + String(httpCode) + ": " + response.substring(0, 200));
+            "[Uploader] Verify HTTP " + String(httpCode) + ": " + response.substring(0, 300));
 
         if (httpCode == HTTP_CODE_OK) {
             JsonDocument responseDoc;
             DeserializationError err = deserializeJson(responseDoc, response);
+            if (err != DeserializationError::Ok) {
+                debugWS.log(MOD_UPLOAD, LVL_ERROR,
+                    "[Uploader] Verify JSON parse error: " + String(err.c_str()));
+            } else if (!responseDoc["username"].is<const char*>()) {
+                debugWS.log(MOD_UPLOAD, LVL_WARN,
+                    "[Uploader] Verify response missing 'username' field");
+            }
             if (err == DeserializationError::Ok && responseDoc["username"].is<const char*>()) {
                 _accountInfo.username          = responseDoc["username"].as<String>();
                 _accountInfo.subscription      = responseDoc["subscription_status"].as<String>();
@@ -467,6 +511,9 @@ bool Uploader::_fetchAccountInfo() {
                     " (" + _accountInfo.subscription +
                     ") lifetime=" + String((int32_t)_accountInfo.lifetime_readings));
             }
+        } else {
+            debugWS.log(MOD_UPLOAD, LVL_WARN,
+                "[Uploader] Verify got HTTP " + String(httpCode) + " (expected 200)");
         }
     } else {
         debugWS.log(MOD_UPLOAD, LVL_WARN,
