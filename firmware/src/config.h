@@ -3,10 +3,12 @@
 // =============================================================================
 // RadiaLog Firmware - Hardware Configuration
 // Board-specific pin mappings selected via build flags:
-//   -DBOARD_XIAO_ESP32S3   → Seeed XIAO ESP32S3 + Wio-SX1262  (no display)
-//   -DBOARD_TDISPLAY_S3    → LilyGO T-Display S3 (1.9" TFT)
+//   -DBOARD_XIAO_ESP32S3      → Seeed XIAO ESP32S3 + Wio-SX1262  (no display)
+//   -DBOARD_XIAO_ESP32S3_PLUS → Seeed XIAO ESP32S3 Plus (no display, built-in battery divider)
+//   -DBOARD_TDISPLAY_S3       → LilyGO T-Display S3 (1.9" TFT)
 //   -DBOARD_TDISPLAY_S3_AMOLED → LilyGO T-Display S3 AMOLED (1.91" RM67162)
 //   -DBOARD_WS_AMOLED_175  → Waveshare ESP32-S3-Touch-AMOLED-1.75-G (circular)
+//   -DBOARD_HELTEC_TRACKER → Heltec Wireless Tracker V1.1 (0.96" ST7735S)
 //
 // To add a new board:
 //   1. Add a new #elif block below with pin mappings
@@ -45,6 +47,27 @@
 #define LORA_RST_PIN    42
 #define LORA_BUSY_PIN   40
 #define LORA_DIO1_PIN   39
+
+// No display on this board
+
+// =============================================================================
+// Board: Seeed XIAO ESP32S3 Plus (no display, built-in battery voltage divider)
+// =============================================================================
+#elif defined(BOARD_XIAO_ESP32S3_PLUS)
+
+// GPS UART1
+#define GPS_TX_PIN      43
+#define GPS_RX_PIN      44
+#define GPS_BAUD        9600
+#define GPS_UART_NUM    1
+
+// Status LED (built-in, GPIO21)
+#define LED_PIN         21
+
+// Battery ADC (built-in gated voltage divider: GPIO6 enables, A0 reads)
+#define BATTERY_ADC_PIN           1
+#define BATTERY_ADC_ENABLE_PIN    6
+#define BATTERY_DIVIDER_RATIO     2.0f
 
 // No display on this board
 
@@ -187,8 +210,46 @@
 #define TOUCH_INT_PIN     11
 #define TOUCH_RST_PIN     40
 
+// =============================================================================
+// Board: Heltec Wireless Tracker V1.1 (0.96" ST7735S 160x80, SPI)
+//        UC6580 multi-constellation GNSS (UART, 115200 baud)
+// =============================================================================
+#elif defined(BOARD_HELTEC_TRACKER)
+
+// Vext power control — GPIO3 HIGH enables GPS, GPS LNA, and display backlight
+#define VEXT_PIN            3
+#define VEXT_ACTIVE_HIGH    1
+
+// GPS UART1 — UC6580 (L1+L5, multi-constellation)
+#define GPS_TX_PIN      33
+#define GPS_RX_PIN      34
+#define GPS_BAUD        115200
+#define GPS_UART_NUM    1
+#define GPS_RESET_PIN   35
+
+// Status LED
+#define LED_PIN         18
+
+// Battery ADC (gated high-impedance divider: GPIO2 enables, GPIO1 reads)
+#define BATTERY_ADC_PIN           1
+#define BATTERY_ADC_ENABLE_PIN    2
+#define BATTERY_DIVIDER_RATIO     5.12f
+#define BATTERY_ADC_ATTEN         ADC_2_5db
+
+// Display — 160x80 ST7735S (SPI, rectangular)
+#define HAS_DISPLAY       1
+#define DISPLAY_WIDTH     160
+#define DISPLAY_HEIGHT    80
+#define TFT_BL_PIN        21
+#define TFT_POWER_PIN     -1    // Powered via Vext
+
+// Single button (boot button GPIO0)
+#define HAS_BUTTON      1
+#define BUTTON_PIN      0
+#define BUTTON2_PIN     -1
+
 #else
-#error "No board defined. Pass -DBOARD_XIAO_ESP32S3, -DBOARD_TDISPLAY_S3, -DBOARD_TDISPLAY_S3_AMOLED, -DBOARD_WAVESHARE_ROUND, or -DBOARD_WS_AMOLED_175 in build_flags."
+#error "No board defined. Pass -DBOARD_XIAO_ESP32S3, -DBOARD_XIAO_ESP32S3_PLUS, -DBOARD_TDISPLAY_S3, -DBOARD_TDISPLAY_S3_AMOLED, -DBOARD_WAVESHARE_ROUND, -DBOARD_WS_AMOLED_175, or -DBOARD_HELTEC_TRACKER in build_flags."
 #endif
 
 // =============================================================================

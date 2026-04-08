@@ -355,15 +355,13 @@ void StatusPortal::_registerRoutes() {
             }
 
             // Derive verify URL from configured upload URL
-            String verifyUrl = _cfg->getUploadUrl();
-            if (verifyUrl.endsWith("/upload")) {
-                verifyUrl = verifyUrl.substring(0, verifyUrl.length() - 7) + "/verify";
-            } else {
-                int lastSlash = verifyUrl.lastIndexOf('/');
-                if (lastSlash > 0) {
-                    verifyUrl = verifyUrl.substring(0, lastSlash) + "/verify";
-                }
-            }
+            String uploadUrl = _cfg->getUploadUrl();
+            // Strip path to base and append the radialog verify route
+            int protoEnd = uploadUrl.indexOf("://");
+            int pathStart = (protoEnd > 0) ? uploadUrl.indexOf('/', protoEnd + 3) : -1;
+            String verifyUrl = (pathStart > 0)
+                ? uploadUrl.substring(0, pathStart) + "/api/radialog/verify"
+                : uploadUrl + "/api/radialog/verify";
 
             if (verifyUrl.length() == 0) {
                 request->send(400, "application/json",

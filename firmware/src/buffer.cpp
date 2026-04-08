@@ -352,7 +352,7 @@ void ReadingBuffer::markUploaded(const uint32_t* ids, uint32_t count) {
 }
 
 // =============================================================================
-// pruneUploaded — compact storage by removing leading uploaded readings
+// pruneUploaded — compact storage by removing all uploaded readings
 // =============================================================================
 
 void ReadingBuffer::pruneUploaded() {
@@ -363,7 +363,7 @@ void ReadingBuffer::pruneUploaded() {
         return;
     }
 
-    // Read status file to find contiguous uploaded block at the start
+    // Read entire status file to identify which readings to keep
     File sf = LittleFS.open(STATUS_FILE, "r");
     if (!sf) {
         xSemaphoreGive((SemaphoreHandle_t)_mutex);
@@ -377,63 +377,59 @@ void ReadingBuffer::pruneUploaded() {
         return;
     }
 
-    // Count contiguous uploaded readings from the beginning
-    uint32_t pruneCount = 0;
-    while (pruneCount < statusSize) {
-        uint8_t status;
-        if (sf.read(&status, 1) != 1) break;
-        if (status != 1) break;
-        pruneCount++;
-    }
-    sf.close();
-
-    if (pruneCount == 0) {
+    uint8_t* statusBuf = new (std::nothrow) uint8_t[statusSize];
+    if (statusBuf == nullptr) {
+        sf.close();
         xSemaphoreGive((SemaphoreHandle_t)_mutex);
         return;
     }
 
-    // --- Compact readings.bin: copy remaining records to temp file ---
-    size_t skipBytes   = static_cast<size_t>(pruneCount) * READING_BINARY_SIZE;
-    size_t remainCount = _depth - pruneCount;
+    sf.read(statusBuf, statusSize);
+    sf.close();
 
+    // Count how many uploaded readings we'll prune
+    uint32_t pruneCount = 0;
+    for (size_t i = 0; i < statusSize; i++) {
+        if (statusBuf[i] == 1) pruneCount++;
+    }
+
+    if (pruneCount == 0) {
+        delete[] statusBuf;
+        xSemaphoreGive((SemaphoreHandle_t)_mutex);
+        return;
+    }
+
+    // --- Compact: copy only pending readings to temp files ---
     {
         File src = LittleFS.open(READINGS_FILE, "r");
-        File dst = LittleFS.open("/readings_tmp.bin", "w");
-        if (!src || !dst) { src.close(); dst.close(); xSemaphoreGive((SemaphoreHandle_t)_mutex); return; }
-
-        src.seek(skipBytes);
-        uint8_t chunk[512];
-        size_t remaining = remainCount * READING_BINARY_SIZE;
-        while (remaining > 0) {
-            size_t toRead = (remaining < sizeof(chunk)) ? remaining : sizeof(chunk);
-            size_t got = src.read(chunk, toRead);
-            if (got == 0) break;
-            dst.write(chunk, got);
-            remaining -= got;
+        File rdst = LittleFS.open("/readings_tmp.bin", "w");
+        File sdst = LittleFS.open("/status_tmp.bin", "w");
+        if (!src || !rdst || !sdst) {
+            src.close(); rdst.close(); sdst.close();
+            delete[] statusBuf;
+            xSemaphoreGive((SemaphoreHandle_t)_mutex);
+            return;
         }
+
+        uint8_t record[READING_BINARY_SIZE];
+        uint8_t pending = 0;
+
+        for (size_t i = 0; i < statusSize; i++) {
+            if (statusBuf[i] == 0) {
+                // Pending reading — seek, read, and copy to temp files
+                if (!src.seek(static_cast<size_t>(i) * READING_BINARY_SIZE)) break;
+                if (src.read(record, READING_BINARY_SIZE) != READING_BINARY_SIZE) break;
+                rdst.write(record, READING_BINARY_SIZE);
+                sdst.write(&pending, 1);
+            }
+        }
+
         src.close();
-        dst.close();
+        rdst.close();
+        sdst.close();
     }
 
-    // --- Compact status file: copy remaining bytes to temp file ---
-    {
-        File src = LittleFS.open(STATUS_FILE, "r");
-        File dst = LittleFS.open("/status_tmp.bin", "w");
-        if (!src || !dst) { src.close(); dst.close(); xSemaphoreGive((SemaphoreHandle_t)_mutex); return; }
-
-        src.seek(pruneCount);
-        uint8_t chunk[512];
-        size_t remaining = statusSize - pruneCount;
-        while (remaining > 0) {
-            size_t toRead = (remaining < sizeof(chunk)) ? remaining : sizeof(chunk);
-            size_t got = src.read(chunk, toRead);
-            if (got == 0) break;
-            dst.write(chunk, got);
-            remaining -= got;
-        }
-        src.close();
-        dst.close();
-    }
+    delete[] statusBuf;
 
     // --- Swap files ---
     LittleFS.remove(READINGS_FILE);

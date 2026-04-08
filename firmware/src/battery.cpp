@@ -12,10 +12,22 @@ Battery::Battery()
 
 void Battery::begin() {
     analogSetAttenuation(ADC_11db);
+#ifdef BATTERY_ADC_ATTEN
+    analogSetPinAttenuation(BATTERY_ADC_PIN, BATTERY_ADC_ATTEN);
+#endif
     pinMode(BATTERY_ADC_PIN, INPUT);
+#ifdef BATTERY_ADC_ENABLE_PIN
+    pinMode(BATTERY_ADC_ENABLE_PIN, OUTPUT);
+#endif
 }
 
 void Battery::update() {
+#ifdef BATTERY_ADC_ENABLE_PIN
+    // Enable the gated voltage divider before reading
+    digitalWrite(BATTERY_ADC_ENABLE_PIN, HIGH);
+    delayMicroseconds(100);   // Allow divider to settle
+#endif
+
     // Oversample for noise reduction
     uint32_t sum = 0;
     for (int i = 0; i < BATTERY_SAMPLES; i++) {
@@ -25,6 +37,11 @@ void Battery::update() {
 
     // Apply voltage divider ratio to get actual battery voltage
     _voltage = (adc_mv * BATTERY_DIVIDER_RATIO) / 1000.0f;
+
+#ifdef BATTERY_ADC_ENABLE_PIN
+    // Disable divider to reduce idle current draw
+    digitalWrite(BATTERY_ADC_ENABLE_PIN, LOW);
+#endif
 }
 
 uint8_t Battery::getPercent() const {

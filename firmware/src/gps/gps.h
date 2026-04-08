@@ -20,6 +20,9 @@ public:
     /// Returns true if a valid GPS fix is held.
     virtual bool hasFix() const = 0;
 
+    /// Returns true if NMEA data is being received from the module (even without fix).
+    virtual bool isReceivingData() const { return false; }
+
     /// Latitude in decimal degrees (valid only if hasFix())
     virtual double getLat() const = 0;
 

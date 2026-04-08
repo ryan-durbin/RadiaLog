@@ -4,7 +4,9 @@
       "Bash(grep -r \"class\\\\|struct\" /home/ryandurbin/projects/RadiaLog/)",
       "Bash(git add:*)",
       "Bash(git commit -m ':*)",
-      "Bash(git submodule:*)"
+      "Bash(git submodule:*)",
+      "Bash(curl -sL --max-time 30 \"https://docs.heltec.org/en/node/esp32/wireless_tracker/frequently_asked_questions.html\")",
+      "Bash(curl:*)"
     ]
   }
 }

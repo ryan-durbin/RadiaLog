@@ -95,6 +95,13 @@ void setup() {
     }
     Serial.println(F("[RadiaLog] Firmware v" FW_VERSION " starting..."));
 
+    // Enable Vext power rail (Heltec Wireless Tracker: powers GPS + display)
+#ifdef VEXT_PIN
+    pinMode(VEXT_PIN, OUTPUT);
+    digitalWrite(VEXT_PIN, VEXT_ACTIVE_HIGH ? HIGH : LOW);
+    delay(20);  // Allow peripherals to power up
+#endif
+
     // 2. Load configuration from LittleFS
     configMgr.load();
 
