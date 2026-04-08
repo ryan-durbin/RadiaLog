@@ -187,5 +187,6 @@ popup.addEventListener('mouseenter',function(){clearTimeout(htimer);clearTimeout
 popup.addEventListener('mouseleave',function(){hidePopup();});
 document.addEventListener('click',function(){hidePopup();});
 </script>
+<script src="/templates.js"></script>
 </body>
 </html>)rawhtml";

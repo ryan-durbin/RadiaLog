@@ -264,5 +264,6 @@ select:focus{border-color:#58a6ff}
   document.addEventListener('click',function(){hidePopup();});
 })();
 </script>
+<script src="/templates.js"></script>
 </body>
 </html>)rawhtml";

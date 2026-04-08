@@ -5,6 +5,7 @@
 #include "html/debug_html.h"
 #include "html/settings_html.h"
 #include "html/data_html.h"
+#include "html/templates_js.h"
 #include <ArduinoJson.h>
 #include <LittleFS.h>
 #include <Update.h>
@@ -106,6 +107,12 @@ void StatusPortal::_registerRoutes() {
 
     _server->on("/data", HTTP_GET, [](AsyncWebServerRequest* request) {
         request->send_P(200, "text/html", DATA_HTML);
+    });
+
+    _server->on("/templates.js", HTTP_GET, [](AsyncWebServerRequest* request) {
+        AsyncWebServerResponse* response = request->beginResponse_P(200, "application/javascript", TEMPLATES_JS);
+        response->addHeader("Cache-Control", "public, max-age=3600");
+        request->send(response);
     });
 
     // --- API endpoints ---
@@ -354,14 +361,11 @@ void StatusPortal::_registerRoutes() {
                 return;
             }
 
-            // Derive verify URL from configured upload URL
-            String uploadUrl = _cfg->getUploadUrl();
-            // Strip path to base and append the radialog verify route
-            int protoEnd = uploadUrl.indexOf("://");
-            int pathStart = (protoEnd > 0) ? uploadUrl.indexOf('/', protoEnd + 3) : -1;
-            String verifyUrl = (pathStart > 0)
-                ? uploadUrl.substring(0, pathStart) + "/api/radialog/verify"
-                : uploadUrl + "/api/radialog/verify";
+            // Derive verify URL from configured upload URL by replacing trailing /upload with /verify
+            String verifyUrl = _cfg->getUploadUrl();
+            if (verifyUrl.endsWith("/upload")) {
+                verifyUrl = verifyUrl.substring(0, verifyUrl.length() - 7) + "/verify";
+            }
 
             if (verifyUrl.length() == 0) {
                 request->send(400, "application/json",
@@ -603,25 +607,28 @@ void StatusPortal::_handleApiStatus(AsyncWebServerRequest* request) {
     doc["buffer_pending"] = stats.pending;
     doc["buffer_total"]   = stats.depth;
 
-    // Upload — prefer persisted epoch (survives reboot)
+    // Upload — send last_upload_epoch for client-side formatting
     unsigned long lastUpMillis = _uploader->getLastUploadTime();
     time_t lastUpEpoch = _uploader->getLastUploadEpoch();
     if (lastUpMillis > 0) {
-        unsigned long ago = (millis() - lastUpMillis) / 1000;
-        doc["last_upload"] = String(ago) + "s ago";
-    } else if (lastUpEpoch > 0) {
-        time_t now = time(nullptr);
-        if (now > 1000000000) {
-            long ago = now - lastUpEpoch;
-            if (ago < 60) doc["last_upload"] = String(ago) + "s ago";
-            else if (ago < 3600) doc["last_upload"] = String(ago / 60) + "m ago";
-            else if (ago < 86400) doc["last_upload"] = String(ago / 3600) + "h ago";
-            else doc["last_upload"] = String(ago / 86400) + "d ago";
-        } else {
-            doc["last_upload"] = "Never";
+        // Use millis-based timestamp converted to epoch for consistency
+        time_t nowEpoch = time(nullptr);
+        unsigned long agoSec = (millis() - lastUpMillis) / 1000;
+        if (nowEpoch > 1000000000) {
+            doc["last_upload_epoch"] = static_cast<unsigned long>(nowEpoch - agoSec);
         }
+        doc["last_upload"] = "recent";
+    } else if (lastUpEpoch > 0) {
+        doc["last_upload_epoch"] = static_cast<unsigned long>(lastUpEpoch);
+        doc["last_upload"] = "past";
     } else {
         doc["last_upload"] = "Never";
+    }
+
+    // Next scheduled upload
+    time_t nextUp = _uploader->getNextUploadEpoch();
+    if (nextUp > 0) {
+        doc["next_upload_epoch"] = static_cast<unsigned long>(nextUp);
     }
 
     // Battery
@@ -638,6 +645,9 @@ void StatusPortal::_handleApiStatus(AsyncWebServerRequest* request) {
 
     // Lifetime readings logged (gamification counter)
     doc["total_readings_logged"] = _cfg->getTotalReadingsLogged();
+
+    // Upload enabled — false when no device token is configured
+    doc["upload_enabled"] = _cfg->getToken().length() > 0;
 
     // Display capabilities (so the web UI can conditionally show display settings)
 #ifdef HAS_DISPLAY

@@ -32,6 +32,7 @@ main{max-width:720px;margin:0 auto;padding:1rem}
 .detail{font-size:0.8rem;color:#8b949e;margin-top:0.25rem}
 .status-ok{color:#3fb950}.status-err{color:#f85149}.status-warn{color:#d29922}
 .alert-conn{display:none;background:#f8514922;border:1px solid #f85149;border-radius:6px;padding:0.6rem 1rem;margin-bottom:1rem;color:#f85149;font-weight:600}
+.alert-token{display:none;background:#d2992222;border:1px solid #d29922;border-radius:6px;padding:0.6rem 1rem;margin-bottom:1rem;color:#d29922;font-weight:600}
 .section-title{font-size:0.875rem;text-transform:uppercase;letter-spacing:0.05em;color:#8b949e;margin:1rem 0 0.5rem}
 .batt-bar{height:6px;border-radius:3px;background:#21262d;margin-top:0.35rem;overflow:hidden}
 .batt-fill{height:100%;border-radius:3px;transition:width 0.5s}
@@ -60,7 +61,9 @@ main{max-width:720px;margin:0 auto;padding:1rem}
 <div class="status-popup" id="status-popup"></div>
 <main>
   <div class="alert-conn" id="conn-lost">&#9888; Connection lost — device unreachable</div>
+  <div class="alert-token" id="no-token">&#9888; No device token configured — uploads disabled. <a href="/settings">Configure in Settings</a></div>
 
+  <section id="sect-radiation">
   <p class="section-title">Radiation</p>
   <div class="stats-grid">
     <div class="card-sm">
@@ -74,18 +77,27 @@ main{max-width:720px;margin:0 auto;padding:1rem}
       <div class="detail">CPS</div>
     </div>
   </div>
+  </section>
 
+  <section id="sect-location">
   <p class="section-title">Location</p>
-  <div class="card">
-    <div class="card-title">GPS Fix</div>
-    <div class="card-value" id="gps-fix">—</div>
-    <div class="detail">
-      Lat: <span id="gps-lat">—</span> &nbsp;
-      Lon: <span id="gps-lon">—</span> &nbsp;
-      Sats: <span id="gps-sats">—</span>
+  <div class="card" style="display:flex;gap:1rem;align-items:stretch">
+    <div style="flex:1;min-width:0">
+      <div class="card-title">GPS Fix</div>
+      <div class="card-value" id="gps-fix">—</div>
+      <div class="detail">
+        Lat: <span id="gps-lat">—</span> &nbsp;
+        Lon: <span id="gps-lon">—</span>
+      </div>
+      <div class="detail">Sats: <span id="gps-sats">—</span></div>
+    </div>
+    <div id="minimap-wrap" style="flex:1;min-width:140px;min-height:140px;border-radius:6px;overflow:hidden;background:#0d1117;display:flex;align-items:center;justify-content:center">
+      <span style="color:#484f58;font-size:0.75rem">Awaiting fix&hellip;</span>
     </div>
   </div>
+  </section>
 
+  <section id="sect-connectivity">
   <p class="section-title">Connectivity</p>
   <div class="stats-grid">
     <div class="card-sm">
@@ -100,7 +112,9 @@ main{max-width:720px;margin:0 auto;padding:1rem}
       <div class="detail" id="rc-source"></div>
     </div>
   </div>
+  </section>
 
+  <section id="sect-upload">
   <p class="section-title">Buffer &amp; Upload</p>
   <div class="stats-grid">
     <div class="card-sm">
@@ -113,11 +127,17 @@ main{max-width:720px;margin:0 auto;padding:1rem}
       <div class="card-value" style="font-size:1rem" id="last-upload">—</div>
     </div>
     <div class="card-sm">
+      <div class="card-title">Next Upload</div>
+      <div class="card-value" style="font-size:1rem" id="next-upload">—</div>
+    </div>
+    <div class="card-sm">
       <div class="card-title">Lifetime Logged</div>
       <div class="card-value" id="total-logged">—</div>
     </div>
   </div>
+  </section>
 
+  <section id="sect-power">
   <p class="section-title">Power</p>
   <div class="card">
     <div class="stats-grid" style="margin-bottom:0">
@@ -137,7 +157,9 @@ main{max-width:720px;margin:0 auto;padding:1rem}
       </div>
     </div>
   </div>
+  </section>
 
+  <section id="sect-account">
   <p class="section-title">RadiaMaps Account</p>
   <div class="card">
     <div class="stats-grid" style="margin-bottom:0">
@@ -159,6 +181,7 @@ main{max-width:720px;margin:0 auto;padding:1rem}
       </div>
     </div>
   </div>
+  </section>
 
   <div class="version-info" id="version-info"></div>
 </main>
@@ -166,8 +189,10 @@ main{max-width:720px;margin:0 auto;padding:1rem}
 <script>
 (function(){
   var connLost = document.getElementById('conn-lost');
+  var noToken = document.getElementById('no-token');
   function setText(id, val){ var el=document.getElementById(id); if(el) el.textContent=val; }
   function dotColor(id, ok){ var el=document.getElementById(id); if(!el)return; el.className='dot '+(ok?'dot-green':'dot-red'); }
+  var mapLat=0,mapLon=0;
 
   function fmtUptime(s){
     if(s<60) return s+'s';
@@ -177,11 +202,30 @@ main{max-width:720px;margin:0 auto;padding:1rem}
     return Math.floor(h/24)+'d '+h%24+'h';
   }
 
+  function fmtDuration(s){
+    if(s<0) s=0;
+    if(s<60) return s+'s ago';
+    if(s<3600) return Math.floor(s/60)+'m '+Math.floor(s%60)+'s ago';
+    var h=Math.floor(s/3600),m=Math.floor((s%3600)/60);
+    if(h<24) return h+'h '+m+'m ago';
+    return Math.floor(h/24)+'d '+h%24+'h ago';
+  }
+
+  function fmtCountdown(s){
+    if(s<=0) return 'Now';
+    if(s<60) return 'in '+s+'s';
+    if(s<3600) return 'in '+Math.floor(s/60)+'m '+Math.floor(s%60)+'s';
+    var h=Math.floor(s/3600),m=Math.floor((s%3600)/60);
+    if(h<24) return 'in '+h+'h '+m+'m';
+    return 'in '+Math.floor(h/24)+'d '+h%24+'h';
+  }
+
   function refresh(){
     fetch('/api/status')
       .then(function(r){ if(!r.ok) throw new Error('bad'); return r.json(); })
       .then(function(d){
         connLost.style.display='none';
+        noToken.style.display = d.upload_enabled ? 'none' : 'block';
 
         // Radiation
         setText('dose-rate', typeof d.dose_rate==='number' ? (d.dose_rate * 1000).toFixed(1) : '—');
@@ -196,6 +240,18 @@ main{max-width:720px;margin:0 auto;padding:1rem}
         setText('gps-lon', gpsOk&&d.gps_lon!=null?d.gps_lon.toFixed(5):'—');
         setText('gps-sats', d.gps_sats!=null?d.gps_sats:'—');
         dotColor('nav-gps', gpsOk);
+
+        // Mini map — update only when coordinates change significantly
+        var mw=document.getElementById('minimap-wrap');
+        if(mw&&gpsOk&&d.gps_lat!=null&&d.gps_lon!=null){
+          var lt=d.gps_lat,ln=d.gps_lon;
+          if(Math.abs(lt-mapLat)>0.0001||Math.abs(ln-mapLon)>0.0001){
+            mapLat=lt;mapLon=ln;
+            var d2=0.004;
+            var src='https://www.openstreetmap.org/export/embed.html?bbox='+(ln-d2)+','+(lt-d2)+','+(ln+d2)+','+(lt+d2)+'&layer=mapnik&marker='+lt+','+ln;
+            mw.innerHTML='<iframe style="width:100%;height:100%;min-height:140px;border:0;border-radius:6px" src="'+src+'" loading="lazy"></iframe>';
+          }
+        }
 
         // WiFi
         var wifiOk=d.wifi_connected===true||d.wifi_connected===1;
@@ -217,7 +273,18 @@ main{max-width:720px;margin:0 auto;padding:1rem}
         // Buffer
         setText('buffer-pending', d.buffer_pending!=null?d.buffer_pending:'—');
         setText('buffer-total', d.buffer_total!=null?d.buffer_total:'—');
-        setText('last-upload', d.last_upload||'Never');
+        if(d.last_upload_epoch){
+          var agoS=Math.floor(Date.now()/1000)-d.last_upload_epoch;
+          setText('last-upload', fmtDuration(agoS));
+        } else {
+          setText('last-upload', 'Never');
+        }
+        if(d.next_upload_epoch){
+          var inS=d.next_upload_epoch-Math.floor(Date.now()/1000);
+          setText('next-upload', fmtCountdown(inS));
+        } else {
+          setText('next-upload', '—');
+        }
         setText('total-logged', d.total_readings_logged!=null?Number(d.total_readings_logged).toLocaleString():'—');
 
         // Battery
@@ -260,6 +327,9 @@ main{max-width:720px;margin:0 auto;padding:1rem}
         // Version
         var vi=document.getElementById('version-info');
         if(vi&&d.fw_version) vi.textContent='RadiaLog v'+d.fw_version;
+
+        // Notify template engine (for reactive templates like Rad Pulse)
+        if(window.RadiaLog&&window.RadiaLog.onData) window.RadiaLog.onData(d);
       })
       .catch(function(){
         connLost.style.display='block';
@@ -299,5 +369,6 @@ main{max-width:720px;margin:0 auto;padding:1rem}
   document.addEventListener('click',function(){hidePopup();});
 })();
 </script>
+<script src="/templates.js"></script>
 </body>
 </html>)rawhtml";
