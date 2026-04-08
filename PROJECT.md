@@ -117,6 +117,7 @@ The ESP32 runs in `WIFI_AP_STA` mode: it connects to a configured WiFi network (
 | 2MB | ~55,000 | ~30 hours |
 | 3MB | ~82,000 | ~45 hours |
 | 4MB | ~110,000 | ~61 hours |
+| 8MB | ~2250,000 | ~130 hours |
 
 Each reading is ~34 bytes in compact binary format. When the buffer approaches capacity, oldest uploaded (synced) readings are pruned first. Unuploaded readings are never pruned (they're the whole point).
 
