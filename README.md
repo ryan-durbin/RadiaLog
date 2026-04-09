@@ -186,7 +186,6 @@ GPS Module ─────────────┘
 - **Light sleep** kicks in during idle periods between readings (ESP-IDF automatic frequency scaling)
 - **WiFi AP auto-disables** after 5 minutes with no connected clients — saves 40-60mA. Hit the reset button to bring it back.
 - **WIFI_PS_MIN_MODEM** enabled — radio sleeps between DTIM beacons in STA mode
-- **Display auto-off** (boards with screens) — configurable timeout
 - **Shipping mode** — hold the boot button for 5 seconds for deep sleep (negligible power draw)
 
 ### Buffer Resilience
@@ -212,28 +211,6 @@ Readings are stored in LittleFS flash across three files: binary reading data, p
 RadiaLog supports up to 4 RadiaCode detectors via Bluetooth simultaneously. Add their MAC addresses in Settings. Each device's readings are logged independently with a device ID tag.
 
 To find your RadiaCode's MAC address, use the BLE scan feature in the web portal's Settings page.
-
----
-
-## Other Boards
-
-The **Seeed XIAO ESP32S3 Plus** is the officially supported board. Firmware also builds for these boards, but they're experimental — they might work, they might not:
-
-| Board | Display | Build Target | Notes |
-|-------|---------|--------------|-------|
-| Seeed XIAO ESP32S3 | None | `seeed_xiao_esp32s3` | Original, no Plus |
-| LilyGO T-Display S3 | 1.9" TFT (170x320) | `lilygo_tdisplay_s3` | Touch, 2 buttons |
-| LilyGO T-Display S3 AMOLED | 1.91" AMOLED (240x536) | `lilygo_tdisplay_s3_amoled` | QSPI, touch |
-| Waveshare Round 1.28" | 1.28" circular (240x240) | `waveshare_round` | Circular display |
-| Waveshare AMOLED 1.75-G | 1.75" circular AMOLED (466x466) | `waveshare_amoled_175` | Built-in GPS + PMU |
-| Heltec Wireless Tracker | 0.96" TFT (160x80) | `heltec_wireless_tracker` | Built-in GPS |
-
-Build for a different board:
-
-```bash
-pio run -e lilygo_tdisplay_s3
-pio run -e lilygo_tdisplay_s3 --target upload
-```
 
 ---
 
