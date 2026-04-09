@@ -1,6 +1,6 @@
 # RadiaLog
 
-> **Don't want to build it yourself?** Assembled RadiaLog devices are available — see [Assembly Services](#assembly) below.
+> **Don't want to build it yourself?** Pre-assembled RadiaLog devices are available at [RadiaMaps.com](https://radiamaps.com).
 
 **Standalone ESP32-S3 datalogger for RadiaCode radiation detectors with GPS and WiFi.**
 
@@ -283,15 +283,13 @@ firmware/
 
 ## Assembly
 
-Don't have the tools or time to build one yourself? Pre-assembled RadiaLog devices are available for **$50 + shipping**. Each unit is hand-assembled and tested in the USA.
+Don't have the tools or time to build one yourself? Pre-assembled RadiaLog devices are available for purchase at [RadiaMaps.com](https://radiamaps.com). Each unit is hand-assembled and tested in the USA.
 
 **What you get:**
 - Fully assembled RadiaLog (Seeed XIAO ESP32S3 Plus + ATGM336H GPS + battery)
 - Firmware pre-flashed and ready to go
 - 3D printed case included
 - Battery voltage divider pre-soldered
-
-**To order**, email [ryan@allthedurbin.com](mailto:ryan@allthedurbin.com) or reach out on the [RadiaMaps Discord](https://discord.gg/radiamaps).
 
 ---
 
