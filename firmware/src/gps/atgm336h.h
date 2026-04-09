@@ -43,6 +43,10 @@ public:
                     uint8_t hour, uint8_t min, uint8_t sec) override;
     void injectPosition(double lat, double lon, float altM) override;
 
+    uint32_t sentencesWithFix() const override;
+    uint32_t failedChecksums() const override;
+    uint32_t charsProcessed() const override;
+
 private:
     void _sendCommand(const String& cmd);
     HardwareSerial& _serial;

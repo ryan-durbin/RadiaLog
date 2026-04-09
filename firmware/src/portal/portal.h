@@ -41,6 +41,10 @@ public:
     /// Update time sync status with source ("NTP" or "GPS").
     void setTimeSyncSource(const String& source);
 
+    /// Update performance metrics (called from main loop).
+    void updatePerf(float loopAvgUs, unsigned long loopMaxUs, float cpuPct,
+                    uint32_t freeHeap, uint32_t minFreeHeap, uint8_t cpuMHz);
+
 private:
     AsyncWebServer*       _server;
     ConfigMgr*            _cfg;
@@ -56,6 +60,14 @@ private:
     volatile float   _batteryVoltage;
     volatile uint8_t _batteryPercent;
     String           _timeSyncSource;  // "" = not synced, "NTP", "GPS"
+
+    // Performance metrics
+    volatile float         _perfLoopAvgUs;
+    volatile unsigned long _perfLoopMaxUs;
+    volatile float         _perfCpuPct;
+    volatile uint32_t      _perfFreeHeap;
+    volatile uint32_t      _perfMinFreeHeap;
+    volatile uint8_t       _perfCpuMHz;
 
     // Route handlers
     void _registerRoutes();

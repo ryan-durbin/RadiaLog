@@ -40,6 +40,10 @@ public:
     uint8_t  getMinute() const override;
     uint8_t  getSecond() const override;
 
+    uint32_t sentencesWithFix() const override;
+    uint32_t failedChecksums() const override;
+    uint32_t charsProcessed() const override;
+
 private:
     TwoWire&    _wire;
     mutable TinyGPSPlus _gps;

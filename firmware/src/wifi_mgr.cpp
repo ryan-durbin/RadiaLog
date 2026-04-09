@@ -1,11 +1,13 @@
 #include "wifi_mgr.h"
 #include <algorithm>
+#include <esp_wifi.h>
 
 // =============================================================================
 // RadiaLog Firmware - WiFi Manager Implementation
 // ESP32 WIFI_AP_STA dual mode:
-//   AP:  RadiaLog-XXXX always on (XXXX = last 4 hex chars of MAC)
+//   AP:  RadiaLog-XXXX on boot, auto-disables after 5 min with no clients
 //   STA: connects to configured networks (priority order), auto-reconnects
+//   Power: WIFI_PS_MIN_MODEM enabled for STA power saving
 // =============================================================================
 
 // Static singleton pointer for WiFi event handler
@@ -23,6 +25,8 @@ WifiMgr::WifiMgr()
     , _connectingNow(false)
     , _onConnectCb(nullptr)
     , _onDisconnectCb(nullptr)
+    , _apActive(false)
+    , _apLastClientSeen(0)
 {
     _instance = this;
 }
@@ -35,11 +39,16 @@ void WifiMgr::begin(const String& apPassword) {
     // Enable dual AP+STA mode
     WiFi.mode(WIFI_AP_STA);
 
+    // Enable modem sleep — radio powers down between DTIM beacons
+    esp_wifi_set_ps(WIFI_PS_MIN_MODEM);
+
     // Register WiFi event handler (non-blocking reconnect via events)
     WiFi.onEvent(_wifiEventHandler);
 
     // Build AP SSID and configure AP
     _setupAP(apPassword);
+    _apActive = true;
+    _apLastClientSeen = millis();   // grace period starts at boot
 }
 
 // -----------------------------------------------------------------------------
@@ -70,6 +79,9 @@ void WifiMgr::update() {
             _tryNextNetwork();
         }
     }
+
+    // AP auto-shutdown after AP_AUTO_OFF_MS with no connected clients
+    _checkAPAutoOff();
 }
 
 // -----------------------------------------------------------------------------
@@ -108,6 +120,10 @@ void WifiMgr::connectSTA() {
 
 bool WifiMgr::isSTAConnected() const {
     return WiFi.status() == WL_CONNECTED;
+}
+
+bool WifiMgr::isAPActive() const {
+    return _apActive;
 }
 
 IPAddress WifiMgr::getSTAIP() const {
@@ -199,6 +215,28 @@ String WifiMgr::_buildAPSsid() {
     snprintf(suffix, sizeof(suffix), "%02X%02X", mac[4], mac[5]);
 
     return String(AP_SSID_PREFIX) + "-" + String(suffix);
+}
+
+// -----------------------------------------------------------------------------
+// Private: _checkAPAutoOff — disable AP after timeout with no clients
+// -----------------------------------------------------------------------------
+
+void WifiMgr::_checkAPAutoOff() {
+    if (!_apActive) return;
+
+    if (WiFi.softAPgetStationNum() > 0) {
+        // Someone is connected — keep resetting the timer
+        _apLastClientSeen = millis();
+        return;
+    }
+
+    // No clients — check if grace period has expired
+    if (millis() - _apLastClientSeen >= AP_AUTO_OFF_MS) {
+        WiFi.softAPdisconnect(true);   // stop AP, release radio resources
+        WiFi.mode(WIFI_STA);           // switch to STA-only mode
+        _apActive = false;
+        Serial.println(F("[WiFi] AP disabled (no clients for 5 min). Reset to re-enable."));
+    }
 }
 
 // -----------------------------------------------------------------------------

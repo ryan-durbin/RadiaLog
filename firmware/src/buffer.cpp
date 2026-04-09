@@ -80,21 +80,40 @@ bool ReadingBuffer::begin() {
         }
     }
 
-    // Reconcile _depth with actual status file size (they can diverge after a crash)
+    // Reconcile _depth with actual file sizes (they can diverge after a crash
+    // or index corruption). Use the minimum of status entries and complete
+    // reading records as the authoritative depth.
     _uploadedInBuffer = 0;
-    if (LittleFS.exists(STATUS_FILE) && _depth > 0) {
-        File sf = LittleFS.open(STATUS_FILE, "r");
-        if (sf) {
-            uint32_t actualDepth = sf.size();
-            if (actualDepth != _depth) {
-                _depth = actualDepth;
+    {
+        uint32_t statusDepth = 0;
+        uint32_t readingsDepth = 0;
+
+        if (LittleFS.exists(STATUS_FILE)) {
+            File sf = LittleFS.open(STATUS_FILE, "r");
+            if (sf) { statusDepth = sf.size(); sf.close(); }
+        }
+        if (LittleFS.exists(READINGS_FILE)) {
+            File rf = LittleFS.open(READINGS_FILE, "r");
+            if (rf) { readingsDepth = rf.size() / READING_BINARY_SIZE; rf.close(); }
+        }
+
+        // Use the minimum — a partial write may have updated one file but not the other.
+        uint32_t actualDepth = (statusDepth < readingsDepth) ? statusDepth : readingsDepth;
+        if (actualDepth != _depth) {
+            _depth = actualDepth;
+        }
+
+        // Count uploaded entries within the reconciled depth.
+        if (_depth > 0 && LittleFS.exists(STATUS_FILE)) {
+            File sf = LittleFS.open(STATUS_FILE, "r");
+            if (sf) {
+                for (uint32_t i = 0; i < _depth && sf.available(); i++) {
+                    uint8_t status;
+                    if (sf.read(&status, 1) != 1) break;
+                    if (status == 1) _uploadedInBuffer++;
+                }
+                sf.close();
             }
-            while (sf.available()) {
-                uint8_t status;
-                if (sf.read(&status, 1) != 1) break;
-                if (status == 1) _uploadedInBuffer++;
-            }
-            sf.close();
         }
     }
 

@@ -115,6 +115,14 @@ uint8_t  ATGM336H::getMinute() const { return _gps.time.minute(); }
 uint8_t  ATGM336H::getSecond() const { return _gps.time.second(); }
 
 // =============================================================================
+// GPS parsing health stats (from TinyGPSPlus)
+// =============================================================================
+
+uint32_t ATGM336H::sentencesWithFix() const { return _gps.sentencesWithFix(); }
+uint32_t ATGM336H::failedChecksums() const { return _gps.failedChecksum(); }
+uint32_t ATGM336H::charsProcessed() const { return _gps.charsProcessed(); }
+
+// =============================================================================
 // A-GPS: time and position aiding via PCAS commands
 // =============================================================================
 
