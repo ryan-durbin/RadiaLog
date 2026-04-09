@@ -104,3 +104,7 @@ uint8_t  LC76G_I2C::getDay()    const { return _gps.date.day(); }
 uint8_t  LC76G_I2C::getHour()   const { return _gps.time.hour(); }
 uint8_t  LC76G_I2C::getMinute() const { return _gps.time.minute(); }
 uint8_t  LC76G_I2C::getSecond() const { return _gps.time.second(); }
+
+uint32_t LC76G_I2C::sentencesWithFix() const { return _gps.sentencesWithFix(); }
+uint32_t LC76G_I2C::failedChecksums() const { return _gps.failedChecksum(); }
+uint32_t LC76G_I2C::charsProcessed() const { return _gps.charsProcessed(); }

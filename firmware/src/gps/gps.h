@@ -61,6 +61,11 @@ public:
 
     /// Inject approximate position for A-GPS. No-op if unsupported.
     virtual void injectPosition(double lat, double lon, float altM) { (void)lat; (void)lon; (void)altM; }
+
+    /// GPS parsing stats (for health monitoring). Default: 0.
+    virtual uint32_t sentencesWithFix() const { return 0; }
+    virtual uint32_t failedChecksums() const { return 0; }
+    virtual uint32_t charsProcessed() const { return 0; }
 };
 
 #endif // GPS_H

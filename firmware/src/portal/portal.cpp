@@ -46,6 +46,12 @@ StatusPortal::StatusPortal()
     , _batteryVoltage(0.0f)
     , _batteryPercent(0)
     , _timeSyncSource("")
+    , _perfLoopAvgUs(0)
+    , _perfLoopMaxUs(0)
+    , _perfCpuPct(0)
+    , _perfFreeHeap(0)
+    , _perfMinFreeHeap(0)
+    , _perfCpuMHz(0)
 {
 }
 
@@ -84,6 +90,16 @@ void StatusPortal::updateBattery(float voltage, uint8_t percent) {
 
 void StatusPortal::setTimeSyncSource(const String& source) {
     _timeSyncSource = source;
+}
+
+void StatusPortal::updatePerf(float loopAvgUs, unsigned long loopMaxUs, float cpuPct,
+                              uint32_t freeHeap, uint32_t minFreeHeap, uint8_t cpuMHz) {
+    _perfLoopAvgUs   = loopAvgUs;
+    _perfLoopMaxUs   = loopMaxUs;
+    _perfCpuPct      = cpuPct;
+    _perfFreeHeap    = freeHeap;
+    _perfMinFreeHeap = minFreeHeap;
+    _perfCpuMHz      = cpuMHz;
 }
 
 // =============================================================================
@@ -634,6 +650,26 @@ void StatusPortal::_handleApiStatus(AsyncWebServerRequest* request) {
     // Battery
     doc["battery_voltage"] = _batteryVoltage;
     doc["battery_percent"] = _batteryPercent;
+
+    // Performance
+    doc["cpu_mhz"]        = _perfCpuMHz;
+    doc["cpu_usage_pct"]  = serialized(String(_perfCpuPct, 1));
+    doc["loop_avg_ms"]    = serialized(String(_perfLoopAvgUs / 1000.0f, 1));
+    doc["loop_max_ms"]    = serialized(String(_perfLoopMaxUs / 1000.0f, 1));
+    doc["free_heap"]      = _perfFreeHeap;
+    doc["min_free_heap"]  = _perfMinFreeHeap;
+
+    // Disk (LittleFS)
+    doc["disk_total"]  = LittleFS.totalBytes();
+    doc["disk_used"]   = LittleFS.usedBytes();
+
+    // GPS health
+    doc["gps_sentences_fix"]  = _gps->sentencesWithFix();
+    doc["gps_failed_cksum"]   = _gps->failedChecksums();
+    doc["gps_chars_processed"] = _gps->charsProcessed();
+
+    // WiFi AP
+    doc["ap_active"] = _wifi->isAPActive();
 
     // Time
     doc["time_synced"] = _timeSyncSource.length() > 0;

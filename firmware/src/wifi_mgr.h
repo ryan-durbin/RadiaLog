@@ -9,8 +9,10 @@
 // =============================================================================
 // RadiaLog Firmware - WiFi Manager
 // Manages AP+STA dual mode (WIFI_AP_STA).
-// AP: always broadcasts RadiaLog-XXXX (last 4 hex of MAC)
-// STA: connects to configured networks for data upload, auto-reconnects
+// AP: broadcasts RadiaLog-XXXX, auto-disables after AP_AUTO_OFF_MS with no
+//     clients connected. Users hit reset to re-enable.
+// STA: connects to configured networks for data upload, auto-reconnects.
+//     Uses WIFI_PS_MIN_MODEM power saving when STA is connected.
 // =============================================================================
 
 /// Credentials for a saved WiFi network.
@@ -54,10 +56,13 @@ public:
     /// Returns true if STA mode has an active connection.
     bool isSTAConnected() const;
 
+    /// Returns true if the AP is currently active.
+    bool isAPActive() const;
+
     /// Returns the STA IP address (or 0.0.0.0 if not connected).
     IPAddress getSTAIP() const;
 
-    /// Returns the AP IP address.
+    /// Returns the AP IP address (valid only while AP is active).
     IPAddress getAPIP() const;
 
     /// Returns RSSI of current STA connection (dBm), or 0 if not connected.
@@ -95,6 +100,11 @@ private:
     bool      _staConnected;
     IPAddress _apIP;
     String    _apSsid;
+
+    // AP auto-shutdown: disable AP after AP_AUTO_OFF_MS with no clients
+    bool          _apActive;
+    unsigned long _apLastClientSeen;   // millis() when a client was last connected
+    void _checkAPAutoOff();
 
     // Up to 3 networks, sorted by priority
     static constexpr uint8_t MAX_NETWORKS = 3;

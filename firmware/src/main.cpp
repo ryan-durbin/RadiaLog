@@ -3,6 +3,7 @@
 #include <sys/time.h>
 #include <esp_sntp.h>
 #include <esp_sleep.h>
+#include <esp_pm.h>
 #include <ESPmDNS.h>
 #include "config.h"
 #include "shipping_mode.h"
@@ -70,6 +71,18 @@ static volatile bool timeSynced = false;
 static volatile bool ntpSyncedFlag = false;  // Set by SNTP callback when NTP actually syncs
 static String timeSyncSource = "";  // "NTP" or "GPS"
 
+// --- Performance metrics -----------------------------------------------------
+struct PerfStats {
+    unsigned long loopDurationUs;     // last loop duration (microseconds)
+    unsigned long loopMaxUs;          // max loop duration seen
+    float         loopAvgUs;          // exponential moving average
+    float         cpuUsagePct;        // estimated CPU usage (loop work / total interval)
+    uint32_t      freeHeap;           // free heap bytes
+    uint32_t      minFreeHeap;        // minimum free heap since boot
+    uint8_t       cpuFreqMHz;         // current CPU frequency
+};
+static PerfStats perfStats = {};
+
 static void onNtpSync(struct timeval* tv) {
     ntpSyncedFlag = true;
 }
@@ -94,6 +107,23 @@ void setup() {
         delay(10);
     }
     Serial.println(F("[RadiaLog] Firmware v" FW_VERSION " starting..."));
+
+    // Power management: drop CPU to 80MHz, enable light sleep during idle
+    setCpuFrequencyMhz(80);
+#ifdef CONFIG_PM_ENABLE
+    esp_pm_config_t pm_config = {};
+    pm_config.max_freq_mhz = 80;
+    pm_config.min_freq_mhz = 10;
+    pm_config.light_sleep_enable = true;
+    esp_err_t pm_err = esp_pm_configure(&pm_config);
+    if (pm_err == ESP_OK) {
+        Serial.println(F("[RadiaLog] PM configured: 80MHz max, 10MHz min, light sleep enabled"));
+    } else {
+        Serial.printf("[RadiaLog] PM config failed (%d), using static 80MHz\n", pm_err);
+    }
+#else
+    Serial.println(F("[RadiaLog] CPU frequency: 80 MHz (PM not available)"));
+#endif
 
     // Enable Vext power rail (Heltec Wireless Tracker: powers GPS + display)
 #ifdef VEXT_PIN
@@ -246,6 +276,7 @@ void setup() {
 static uint32_t loopCounter = 0;
 
 void loop() {
+    unsigned long loopStartUs = micros();
     loopCounter++;
 
     // --- -1. Shipping mode check ---------------------------------------------
@@ -430,6 +461,27 @@ void loop() {
     }
 #endif
 
-    // --- 8. Wait until next reading interval ---------------------------------
+    // --- 8. Performance metrics -----------------------------------------------
+    {
+        unsigned long elapsed = micros() - loopStartUs;
+        perfStats.loopDurationUs = elapsed;
+        if (elapsed > perfStats.loopMaxUs) perfStats.loopMaxUs = elapsed;
+        // EMA with alpha ~0.1 (smooth over ~10 loops)
+        perfStats.loopAvgUs = (perfStats.loopAvgUs == 0)
+            ? static_cast<float>(elapsed)
+            : perfStats.loopAvgUs * 0.9f + static_cast<float>(elapsed) * 0.1f;
+        // CPU usage = work time / (work time + sleep time)
+        unsigned long intervalUs = configMgr.getReadingIntervalMs() * 1000UL;
+        perfStats.cpuUsagePct = (intervalUs > 0)
+            ? (perfStats.loopAvgUs / (perfStats.loopAvgUs + static_cast<float>(intervalUs))) * 100.0f
+            : 0.0f;
+        perfStats.freeHeap    = ESP.getFreeHeap();
+        perfStats.minFreeHeap = ESP.getMinFreeHeap();
+        perfStats.cpuFreqMHz  = static_cast<uint8_t>(getCpuFrequencyMhz());
+    }
+    portal.updatePerf(perfStats.loopAvgUs, perfStats.loopMaxUs, perfStats.cpuUsagePct,
+                      perfStats.freeHeap, perfStats.minFreeHeap, perfStats.cpuFreqMHz);
+
+    // --- 9. Wait until next reading interval ---------------------------------
     delay(configMgr.getReadingIntervalMs());
 }

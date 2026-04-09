@@ -64,8 +64,8 @@
 // Status LED (built-in, GPIO21)
 #define LED_PIN         21
 
-// Battery ADC (ADC_BAT on GPIO10, requires external voltage divider)
-#define BATTERY_ADC_PIN           10
+// Battery ADC (D10/A10 = GPIO9, requires external voltage divider)
+#define BATTERY_ADC_PIN           9
 #define BATTERY_DIVIDER_RATIO     2.0f
 
 // No display on this board
@@ -281,6 +281,7 @@
 // WiFi / Portal
 #define AP_SSID_PREFIX      "RadiaLog"
 #define AP_CHANNEL          6
+#define AP_AUTO_OFF_MS      300000UL    // Disable AP after 5 min with no clients
 #define PORTAL_IP           "192.168.4.1"
 
 // Serial debug
