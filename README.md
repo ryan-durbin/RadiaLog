@@ -6,11 +6,7 @@
 
 Connect to a RadiaCode via Bluetooth and RadiaLog automatically logs dose rate and count rate paired with GPS coordinates, then uploads everything to [RadiaMaps.com](https://radiamaps.com) over WiFi. No phone app required — configure everything through the built-in web portal.
 
-![RadiaLog Device](docs/images/radialog-device.jpg)
-<!-- TODO: Add device photos -->
-
-![RadiaLog Assembled](docs/images/radialog-assembled.jpg)
-<!-- TODO: Add assembled device photo -->
+[View the 3D printed case and photos on MakerWorld](https://makerworld.com/en/models/2638033-radialog-radiacode-mapping-companion#profileId-2914169)
 
 ## What It Does
 
@@ -64,8 +60,7 @@ This halves the battery voltage (4.2V becomes 2.1V) so it fits within the ESP32'
 
 ### 3D Printable Case
 
-[Download on MakerWorld](https://makerworld.com/en/models/XXXXXX)
-<!-- TODO: Add MakerWorld link when published -->
+[Download on MakerWorld](https://makerworld.com/en/models/2638033-radialog-radiacode-mapping-companion#profileId-2914169)
 
 ---
 
@@ -296,7 +291,7 @@ Don't have the tools or time to build one yourself? Pre-assembled RadiaLog devic
 - 3D printed case included
 - Battery voltage divider pre-soldered
 
-**To order**, email [radialog@radiamaps.com](mailto:radialog@radiamaps.com) or reach out on the [RadiaMaps Discord](https://discord.gg/radiamaps).
+**To order**, email [ryan@allthedurbin.com](mailto:ryan@allthedurbin.com) or reach out on the [RadiaMaps Discord](https://discord.gg/radiamaps).
 
 ---
 
