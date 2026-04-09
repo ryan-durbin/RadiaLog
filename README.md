@@ -25,10 +25,10 @@ Connect to a RadiaCode via Bluetooth and RadiaLog automatically logs dose rate a
 
 | Component | Purpose | Approx. Cost |
 |-----------|---------|--------------|
-| [Seeed XIAO ESP32S3 Plus](https://www.seeedstudio.com/XIAO-ESP32S3-Plus-p-6361.html) | Brain of the device | ~$10 |
+| [Seeed XIAO ESP32S3 Plus](https://www.seeedstudio.com/Seeed-Studio-XIAO-ESP32S3-Plus-p-6361.html) | Brain of the device | ~$10 |
 | [ATGM336H GPS Module](https://www.amazon.com/dp/B09LQDG1PQ) | GPS positioning | ~$8 |
 | [RadiaCode-10x](https://radiacode.com) | Radiation detector | ~$300 |
-| LiPo Battery (3.7V) | Portable power | ~$5 |
+| 18650 Li-ion Battery | Portable power | ~$5 |
 | 2x 200k ohm Resistors | Battery voltage sensing | ~$0.10 |
 
 **Total (excluding RadiaCode): ~$25**
