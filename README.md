@@ -178,7 +178,7 @@ GPS Module ─────────────┘
 ### Reading Flow
 
 1. RadiaLog polls the RadiaCode every 2 seconds via Bluetooth
-2. GPS provides coordinates (falls back to stored position or WiFi geolocation)
+2. GPS provides coordinates
 3. Each reading (34 bytes: lat, lon, dose, count, timestamp, altitude, speed, heading, accuracy) is appended to flash
 4. A background task checks once per minute if it's time to upload
 5. Uploads happen daily (with random jitter) or immediately when WiFi connects after being offline for 24+ hours
@@ -194,7 +194,7 @@ GPS Module ─────────────┘
 
 ### Buffer Resilience
 
-Readings are stored in LittleFS flash across three files: binary reading data, per-reading upload status, and an index file. If power cuts mid-write, the device reconciles on boot by cross-checking actual file sizes against the index — you lose at most one reading. The buffer holds ~55,000 readings per MB of flash (over 30 hours at 2-second intervals on an 8MB board).
+Readings are stored in LittleFS flash across three files: binary reading data, per-reading upload status, and an index file. If power cuts mid-write, the device reconciles on boot by cross-checking actual file sizes against the index — you lose at most one reading.
 
 ---
 
@@ -229,8 +229,8 @@ RadiaLog uploads readings in batches of up to 250 per request. Each reading incl
 ## Troubleshooting
 
 ### RadiaCode won't connect via Bluetooth
-- Make sure your RadiaCode is powered on and not connected to the RadiaCode app on your phone (it can only connect to one device at a time)
-- Check the LED — double flash means no RadiaCode found
+- Make sure your RadiaCode is powered on and not connected to the RadiaCode app on your phone (althorugh the RaidaCode should be able to broadcast to multiple devices)
+- Press reset button on RadiaLog and log back into the webd dashboard
 - If using specific MAC addresses in settings, verify they're correct via the BLE scan feature
 
 ### No GPS fix
@@ -298,7 +298,6 @@ Don't have the tools or time to build one yourself? Pre-assembled RadiaLog devic
 - Fully assembled RadiaLog (Seeed XIAO ESP32S3 Plus + ATGM336H GPS + battery)
 - Firmware pre-flashed and ready to go
 - 3D printed case included
-- Battery voltage divider pre-soldered
 
 ---
 
