@@ -68,27 +68,36 @@ This halves the battery voltage (4.2V becomes 2.1V) so it fits within the ESP32'
 
 ### What You Need
 
-- [PlatformIO](https://platformio.org/install/cli) (CLI or VS Code extension)
 - USB-C cable
+- A computer with Chrome or Edge browser
 
-### Build and Flash
+### Step 1: Download the Firmware
 
-```bash
-cd firmware
+Download the latest `.bin` file from the [Releases page](https://github.com/ryan-durbin/RadiaLog/releases/latest).
 
-# Build
-pio run -e seeed_xiao_esp32s3_plus
+### Step 2: Flash It
 
-# Flash via USB
-pio run -e seeed_xiao_esp32s3_plus --target upload
+1. Go to [ESP Web Tools](https://web.esphome.io/) in Chrome or Edge
+2. Plug your XIAO ESP32S3 Plus into your computer via USB-C
+3. Click **Connect**, select the serial port for your board
+4. Click **Install** and choose the `.bin` file you downloaded
+5. Wait for the flash to complete — that's it!
 
-# (Optional) Watch serial output
-pio device monitor -b 115200
-```
+> **Note:** If your board doesn't show up, you may need to hold the **BOOT** button while plugging in the USB cable to enter bootloader mode.
 
 ### OTA Updates
 
 After the first USB flash, you can update firmware over-the-air through the web portal. No need to plug in again.
+
+### Building from Source (Advanced)
+
+If you want to modify the firmware, you can build it yourself with [PlatformIO](https://platformio.org/install/cli):
+
+```bash
+cd firmware
+pio run -e seeed_xiao_esp32s3_plus
+pio run -e seeed_xiao_esp32s3_plus --target upload
+```
 
 ---
 
