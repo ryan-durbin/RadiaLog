@@ -21,6 +21,7 @@ public:
     ATGM336H(HardwareSerial& serial, int txPin, int rxPin, uint32_t baud = 9600);
 
     void begin() override;
+    void shutdown() override;
     bool poll() override;
     bool hasFix() const override;
     double getLat() const override;

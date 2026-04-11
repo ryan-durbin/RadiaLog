@@ -1,4 +1,5 @@
 #include "atgm336h.h"
+#include "../config.h"
 
 // =============================================================================
 // RadiaLog Firmware - ATGM336H GPS Driver Implementation
@@ -24,7 +25,24 @@ ATGM336H::ATGM336H(HardwareSerial& serial, int txPin, int rxPin, uint32_t baud)
 }
 
 void ATGM336H::begin() {
+#ifdef GPS_POWER_PIN
+    // Drive ATGM336H Pin 5 (ON/OFF) HIGH to enable the module.
+    // External 10k pulldown to GND keeps it off until we explicitly assert HIGH.
+    pinMode(GPS_POWER_PIN, OUTPUT);
+    digitalWrite(GPS_POWER_PIN, HIGH);
+    delay(50);   // Allow the GPS RF/frontend to come up before opening UART
+#endif
     _serial.begin(_baud, SERIAL_8N1, _rxPin, _txPin);
+}
+
+void ATGM336H::shutdown() {
+    // Stop the UART so we don't waste cycles draining a dead module.
+    _serial.end();
+#ifdef GPS_POWER_PIN
+    // Drive ON/OFF LOW — internal pulldown then keeps it LOW after deep sleep
+    // when the ESP32 GPIO floats, so the GPS stays fully powered down.
+    digitalWrite(GPS_POWER_PIN, LOW);
+#endif
 }
 
 bool ATGM336H::poll() {

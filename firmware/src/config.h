@@ -32,6 +32,12 @@
 #define GPS_BAUD        9600
 #define GPS_UART_NUM    1
 
+// GPS power control — drives ATGM336H Pin 5 (ON/OFF) via GPIO5.
+// HIGH enables the module, LOW shuts it off.  External 10k pulldown to GND
+// keeps the GPS off by default (during boot and after deep sleep), so the
+// module cannot drain the battery while the ESP32 is asleep.
+#define GPS_POWER_PIN   5
+
 // Status LED (built-in, GPIO21)
 #define LED_PIN         21
 
@@ -60,6 +66,9 @@
 #define GPS_RX_PIN      44
 #define GPS_BAUD        9600
 #define GPS_UART_NUM    1
+
+// GPS power control — see BOARD_XIAO_ESP32S3 above for wiring details.
+#define GPS_POWER_PIN   5
 
 // Status LED (built-in, GPIO21)
 #define LED_PIN         21
