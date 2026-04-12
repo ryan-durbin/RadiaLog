@@ -32,6 +32,7 @@ Connect to a RadiaCode via Bluetooth and RadiaLog automatically logs dose rate a
 | [RadiaCode-10x](https://radiacode.com) | Radiation detector | ~$300 |
 | 18650 Li-ion Battery | Portable power | ~$5 |
 | 2x 200k ohm Resistors | Battery voltage sensing | ~$0.10 |
+| 1x 10k ohm Resistor | GPS power-control pulldown | ~$0.05 |
 
 **Total (excluding RadiaCode): ~$25**
 
@@ -44,7 +45,25 @@ GPIO43 (TX)  ──────────>   RX
 GPIO44 (RX)  <──────────   TX
 3V3          ──────────>   VCC
 GND          ──────────>   GND
+GPIO5        ──────────>   Pin 5 (ON/OFF)   ── 10k ── GND
 ```
+
+### GPS Power Control (important!)
+
+The ATGM336H draws ~25mA continuously even when the ESP32 is asleep. If you
+leave a low cell in shipping mode, the GPS will happily drain it down to 0V
+and damage the battery. To prevent this, RadiaLog drives the ATGM336H's
+**Pin 5 (ON/OFF)** from **GPIO5**:
+
+- **GPIO5 HIGH** → GPS powered on (firmware sets this in `setup()`)
+- **GPIO5 LOW**  → GPS powered off (firmware sets this before deep sleep)
+- **10k pulldown to GND** keeps the GPS off by default during boot, and
+  holds it off after deep sleep when the GPIO floats
+
+Solder a wire from the GPS module's Pin 5 net to XIAO GPIO5, and a 10k
+resistor from that same net to GND. With this in place, total system
+current in shipping mode drops to ~20–40 µA — a healthy 18650 will sit for
+months instead of being drained overnight.
 
 ### Battery Voltage Divider
 
@@ -193,6 +212,7 @@ GPS Module ─────────────┘
 - **WiFi AP auto-disables** after 5 minutes with no connected clients — saves 40-60mA. Hit the reset button to bring it back.
 - **WIFI_PS_MIN_MODEM** enabled — radio sleeps between DTIM beacons in STA mode
 - **Shipping mode** — hold the boot button for 5 seconds for deep sleep (negligible power draw)
+- **GPS power-gated** — the ATGM336H ON/OFF pin is driven by GPIO5, so the GPS is fully cut (~µA, not ~25mA) whenever the ESP32 is in deep sleep. See [GPS Power Control](#gps-power-control-important) for the wiring.
 
 ### Buffer Resilience
 

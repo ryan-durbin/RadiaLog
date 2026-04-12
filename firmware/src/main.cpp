@@ -292,6 +292,10 @@ void loop() {
         }
         // Flush persistent state
         configMgr.flushTotalReadingsLogged();
+        // Cut power to the GPS so it does not continue to drain the battery
+        // while the ESP32 is in deep sleep.  No-op on boards without a
+        // GPS_POWER_PIN wired up.
+        gps.shutdown();
         Serial.println(F("[RadiaLog] Entering shipping mode (deep sleep)..."));
         Serial.flush();
         // No wakeup sources configured - only reset button wakes

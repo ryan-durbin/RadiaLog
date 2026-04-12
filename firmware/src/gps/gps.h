@@ -14,6 +14,11 @@ public:
     /// Initialize the GPS hardware (UART, etc.)
     virtual void begin() = 0;
 
+    /// Cut power to the GPS module (if a power-control pin is wired).
+    /// Called before the ESP32 enters deep sleep so the GPS does not
+    /// continue to drain the battery.  Default implementation is a no-op.
+    virtual void shutdown() {}
+
     /// Poll for new NMEA data. Returns true if a new fix is available.
     virtual bool poll() = 0;
 
