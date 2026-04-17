@@ -54,6 +54,7 @@ input:focus{outline:none;border-color:#58a6ff}
     <a href="/debug">Debug</a>
     <a href="/settings" class="active">Settings</a>
     <a href="/data">Data</a>
+    <a href="/self-test">Self-Test</a>
   </div>
   <div class="nav-status" style="cursor:pointer">
     <span class="dot dot-gray" id="nav-wifi" title="WiFi"></span>
@@ -152,7 +153,9 @@ input:focus{outline:none;border-color:#58a6ff}
   <div class="actions-grid">
     <button class="btn" onclick="doAction('upload')">Force Upload</button>
     <button class="btn" onclick="doAction('reboot')">Reboot Device</button>
+    <button class="btn btn-danger" onclick="if(confirm('Put the device to sleep? GPS and radio will be cut. Press the RESET button on the board to wake.'))doAction('shutdown')">Sleep (Shipping Mode)</button>
     <button class="btn btn-danger" onclick="if(confirm('Clear all buffered readings?'))doAction('clear')">Clear Buffer</button>
+    <button class="btn btn-danger" onclick="if(confirm('Factory reset will erase ALL settings, WiFi credentials, paired devices, and buffered readings. This cannot be undone. Continue?'))doAction('factory-reset')">Factory Reset</button>
   </div>
 </div>
 

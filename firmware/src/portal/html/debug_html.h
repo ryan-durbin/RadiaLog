@@ -58,6 +58,7 @@ select:focus{border-color:#58a6ff}
     <a href="/debug" class="active">Debug</a>
     <a href="/settings">Settings</a>
     <a href="/data">Data</a>
+    <a href="/self-test">Self-Test</a>
   </div>
   <div class="nav-status" style="cursor:pointer">
     <span class="dot dot-gray" id="nav-wifi" title="WiFi"></span>

@@ -19,7 +19,7 @@
 // =============================================================================
 
 // Firmware version
-#define FW_VERSION      "0.1.0"
+#define FW_VERSION      "0.2.3"
 
 // =============================================================================
 // Board: Seeed XIAO ESP32S3 + Wio-SX1262  (no display)
@@ -32,10 +32,12 @@
 #define GPS_BAUD        9600
 #define GPS_UART_NUM    1
 
-// GPS power control — drives ATGM336H Pin 5 (ON/OFF) via GPIO5.
+// GPS hardware power control — drives the ATGM336H's ON/OFF input via GPIO5.
 // HIGH enables the module, LOW shuts it off.  External 10k pulldown to GND
-// keeps the GPS off by default (during boot and after deep sleep), so the
-// module cannot drain the battery while the ESP32 is asleep.
+// keeps the GPS off by default during boot and after deep sleep.  Only
+// define this for modules that actually break the ON/OFF line out to the
+// header; otherwise rely on the software backup-mode command issued by
+// ATGM336H::shutdown().
 #define GPS_POWER_PIN   5
 
 // Status LED (built-in, GPIO21)
@@ -67,8 +69,10 @@
 #define GPS_BAUD        9600
 #define GPS_UART_NUM    1
 
-// GPS power control — see BOARD_XIAO_ESP32S3 above for wiring details.
-#define GPS_POWER_PIN   5
+// No hardware GPS power control on this board — the stock ATGM336H breakout
+// used here exposes VCC/GND/TX/RX/PPS only, so the module's ON/OFF input
+// isn't accessible externally. Power management is done in software via a
+// PMTK backup-mode command in ATGM336H::shutdown().
 
 // Status LED (built-in, GPIO21)
 #define LED_PIN         21
@@ -291,7 +295,7 @@
 #define AP_SSID_PREFIX      "RadiaLog"
 #define AP_CHANNEL          6
 #define AP_AUTO_OFF_MS      300000UL    // Disable AP after 5 min with no clients
-#define PORTAL_IP           "192.168.4.1"
+#define PORTAL_IP           "10.0.0.1"
 
 // Serial debug
 #define SERIAL_BAUD         115200

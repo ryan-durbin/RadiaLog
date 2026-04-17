@@ -364,6 +364,11 @@ void loop() {
     if (!wasCharging && battery.isCharging()) {
         display.wake();
     }
+    // Self-test display wake — fired by POST /api/actions/display-test
+    if (g_displayTestRequested) {
+        g_displayTestRequested = false;
+        display.wake();
+    }
 #endif
 
     // --- 5. Update portal live data ------------------------------------------
@@ -487,5 +492,13 @@ void loop() {
                       perfStats.freeHeap, perfStats.minFreeHeap, perfStats.cpuFreqMHz);
 
     // --- 9. Wait until next reading interval ---------------------------------
-    delay(configMgr.getReadingIntervalMs());
+    // Chunked wait: poll the BOOT button faster than the loop cadence so short
+    // taps aren't missed between loop iterations (BLE polling can stretch the
+    // work phase past the 50ms debounce window).
+    unsigned long waitStart = millis();
+    unsigned long interval  = configMgr.getReadingIntervalMs();
+    while (millis() - waitStart < interval) {
+        shippingMode.update();
+        delay(20);
+    }
 }

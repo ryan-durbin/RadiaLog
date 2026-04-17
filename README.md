@@ -32,48 +32,54 @@ Connect to a RadiaCode via Bluetooth and RadiaLog automatically logs dose rate a
 | [RadiaCode-10x](https://radiacode.com) | Radiation detector | ~$300 |
 | 18650 Li-ion Battery | Portable power | ~$5 |
 | 2x 200k ohm Resistors | Battery voltage sensing | ~$0.10 |
-| 1x 10k ohm Resistor | GPS power-control pulldown | ~$0.05 |
 
 **Total (excluding RadiaCode): ~$25**
 
 ### Wiring
 
-```
-XIAO ESP32S3 Plus          ATGM336H GPS
-─────────────────          ────────────
-GPIO43 (TX)  ──────────>   RX
-GPIO44 (RX)  <──────────   TX
-3V3          ──────────>   VCC
-GND          ──────────>   GND
-GPIO5        ──────────>   Pin 5 (ON/OFF)   ── 10k ── GND
-```
+![GPS wiring diagram](img/wiring_gps.svg)
 
-### GPS Power Control (important!)
+| XIAO Pin (silkscreen) | GPIO | Direction | GPS Pin | Purpose |
+|---|---|:---:|---|---|
+| `D6` (TX) | GPIO43 | → | RX | UART data to GPS |
+| `D7` (RX) | GPIO44 | ← | TX | UART data from GPS (NMEA) |
+| `3V3` | — | → | VCC | Module power |
+| `GND` | — | — | GND | Common ground |
 
-The ATGM336H draws ~25mA continuously even when the ESP32 is asleep. If you
-leave a low cell in shipping mode, the GPS will happily drain it down to 0V
-and damage the battery. To prevent this, RadiaLog drives the ATGM336H's
-**Pin 5 (ON/OFF)** from **GPIO5**:
+> **Pin labels:** RadiaLog uses the Seeed XIAO's silkscreened `D##` labels as primary — those are what you'll see printed on the board when soldering. The GPIO column maps to the firmware's internal numbering for cross-referencing `firmware/src/config.h`.
 
-- **GPIO5 HIGH** → GPS powered on (firmware sets this in `setup()`)
-- **GPIO5 LOW**  → GPS powered off (firmware sets this before deep sleep)
-- **10k pulldown to GND** keeps the GPS off by default during boot, and
-  holds it off after deep sleep when the GPIO floats
+> Prefer a printable version? Open [`docs/wiring_diagram.html`](docs/wiring_diagram.html) in your browser and use **Print → Save as PDF**.
 
-Solder a wire from the GPS module's Pin 5 net to XIAO GPIO5, and a 10k
-resistor from that same net to GND. With this in place, total system
-current in shipping mode drops to ~20–40 µA — a healthy 18650 will sit for
-months instead of being drained overnight.
+### GPS Sleep Mode
+
+The ATGM336H draws ~25 mA continuously while tracking, so RadiaLog powers
+it down before entering shipping mode. Two strategies are used depending on
+whether the board exposes the module's ON/OFF line:
+
+- **Hardware cut (preferred)** — on boards where the GPS ON/OFF pin is
+  broken out to an MCU GPIO (e.g. `BOARD_XIAO_ESP32S3` via `GPS_POWER_PIN`),
+  the firmware drives the line LOW and latches the pad through deep sleep
+  with `gpio_hold_en()`. VCC still reaches the module, but the ATGM336H
+  enters full shutdown — essentially 0 mA draw. An external 10k pulldown
+  to GND keeps the line LOW at boot so the GPS stays off until the firmware
+  explicitly enables it.
+- **Software backup mode (fallback)** — on boards where the ON/OFF pin
+  isn't accessible (e.g. the stock ATGM336H breakout used with
+  `BOARD_XIAO_ESP32S3_PLUS`, which only exposes VCC/GND/TX/RX/PPS), the
+  firmware issues `$PMTK161,0` (and a couple of other AT6558 standby
+  candidates) over UART before sleeping. The module powers down its
+  receiver and RF front-end, dropping to roughly 10–50 µA while VCC stays
+  applied — still low enough that a healthy cell sits for months.
+
+On wake, `ATGM336H::begin()` releases the pad hold (if any), drives
+`GPS_POWER_PIN` HIGH, and reopens UART — the module cold-starts and
+reacquires a fix normally.
 
 ### Battery Voltage Divider
 
-The XIAO ESP32S3 Plus doesn't have a built-in battery voltage sense circuit. Solder two 200k ohm resistors in series between BAT+ and BAT- (which is GND). Tap the midpoint to GPIO9 (labeled D10/A10 on the board).
+The XIAO ESP32S3 Plus doesn't have a built-in battery voltage sense circuit. Solder two 200k ohm resistors in series between BAT+ and BAT- (which is GND). Tap the midpoint to pin **D10 / A10** (GPIO9 in firmware).
 
-```
-BAT+ ── R1 (200k) ──┬── R2 (200k) ── BAT-
-                     │
-                   GPIO9 (D10/A10)
-```
+![Battery voltage divider](img/wiring_battery.svg)
 
 This halves the battery voltage (4.2V becomes 2.1V) so it fits within the ESP32's ADC range. The high resistance keeps battery drain negligible (~10uA).
 
@@ -124,16 +130,25 @@ pio run -e seeed_xiao_esp32s3_plus --target upload
 
 ## First-Time Setup
 
-1. **Power on** the RadiaLog
+> Prefer a printable walkthrough with screenshots? Open
+> [`docs/setup_guide_screenshots.html`](docs/setup_guide_screenshots.html)
+> in your browser — it's a one-page illustrated quick-start (print to PDF
+> or read on-screen) that covers the steps below with captured images of
+> the portal and the RadiaMaps device-token flow.
+
+1. **Power on** the RadiaLog — press the reset button on the lid to start the setup AP
 2. **Connect** your phone or laptop to the `RadiaLog-XXXX` WiFi network (open network, no password)
 3. **Open** `http://10.0.0.1` in a browser — the dashboard loads
 4. **Go to Settings** and configure:
-   - Your home/mobile WiFi network (up to 3 networks)
+   - Your home/mobile WiFi network (up to 4 networks)
    - Your [RadiaMaps](https://radiamaps.com) device token (get one from your RadiaMaps account)
    - (Optional) Device name, reading interval, AP password
 5. **Turn on** your RadiaCode — RadiaLog finds it via Bluetooth and starts logging automatically
 
 That's it. Readings accumulate in the buffer and upload to RadiaMaps whenever WiFi is available.
+
+> **Heads-up:** the setup AP stays up for 5 minutes after wake. If it times
+> out before you finish, just tap the reset button again.
 
 ---
 
@@ -156,8 +171,10 @@ Live overview of everything happening on the device:
 
 ### Settings
 
-- WiFi networks (up to 3, priority ordered)
+- WiFi networks (up to 4, priority ordered)
 - RadiaMaps device token
+- Upload URL (defaults to radiamaps.com; override for self-hosted backends)
+- Google Maps Geolocation API key (optional — enables WiFi-based fallback when GPS can't get a fix)
 - Device name
 - Reading interval (default: 2 seconds)
 - AP password (default: open)
@@ -176,6 +193,13 @@ Live overview of everything happening on the device:
 - Filter by module: USB, GPS, WiFi, Upload, Buffer
 - Filter by level: Error, Warn, Info, Debug
 
+### Self-Test
+
+Guided post-assembly QA page at `/self-test`. Walks through checks for the
+status LED, boot button, battery ADC, GPS fix, WiFi STA, RadiaCode USB/BLE,
+and display — handy after soldering or before packing a device for
+shipment.
+
 ### Actions
 
 - **Force Upload** — trigger immediate upload to RadiaMaps
@@ -183,6 +207,7 @@ Live overview of everything happening on the device:
 - **Reboot** — restart the device
 - **OTA Update** — upload new firmware (.bin file)
 - **Shutdown** — enter deep sleep (shipping mode)
+- **Factory Reset** — wipe all settings, WiFi credentials, paired devices, and buffered readings, then reboot
 
 ---
 
@@ -212,7 +237,7 @@ GPS Module ─────────────┘
 - **WiFi AP auto-disables** after 5 minutes with no connected clients — saves 40-60mA. Hit the reset button to bring it back.
 - **WIFI_PS_MIN_MODEM** enabled — radio sleeps between DTIM beacons in STA mode
 - **Shipping mode** — hold the boot button for 5 seconds for deep sleep (negligible power draw)
-- **GPS power-gated** — the ATGM336H ON/OFF pin is driven by GPIO5, so the GPS is fully cut (~µA, not ~25mA) whenever the ESP32 is in deep sleep. See [GPS Power Control](#gps-power-control-important) for the wiring.
+- **GPS backup mode** — before entering deep sleep, the firmware sends the ATGM336H a `$PMTK161,0` command to drop it into backup mode (~10–50 µA, down from ~25 mA). See [GPS Sleep Mode](#gps-sleep-mode) for details.
 
 ### Buffer Resilience
 
@@ -273,7 +298,7 @@ RadiaLog uploads readings in batches of up to 250 per request. Each reading incl
 
 ### Battery reading shows N/A
 - The XIAO ESP32S3 Plus requires an external voltage divider (two 200k resistors) — see [wiring section](#battery-voltage-divider)
-- Make sure the divider midpoint connects to GPIO9 (D10/A10), not GPIO10
+- Make sure the divider midpoint connects to pin **D10 / A10** (GPIO9), not D11 (GPIO10)
 
 ---
 
@@ -281,7 +306,7 @@ RadiaLog uploads readings in batches of up to 250 per request. Each reading incl
 
 ```
 firmware/
-├── platformio.ini              # Build config (6 board targets)
+├── platformio.ini              # Build config (7 board targets)
 ├── sdkconfig.defaults          # ESP-IDF power management options
 └── src/
     ├── main.cpp                # Setup + main loop

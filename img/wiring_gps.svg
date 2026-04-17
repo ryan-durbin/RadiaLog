@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 360" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+  <!-- white background so it reads the same in GitHub light/dark mode -->
+  <rect width="820" height="360" fill="#ffffff"/>
+
+  <!-- Title -->
+  <text x="410" y="30" text-anchor="middle" font-size="16" font-weight="700" fill="#1a1a1a">GPS Module Wiring</text>
+
+  <!-- XIAO ESP32S3 Plus -->
+  <rect x="60" y="70" width="230" height="200" rx="10" fill="#eafaf1" stroke="#27ae60" stroke-width="2"/>
+  <text x="175" y="95" text-anchor="middle" font-size="14" font-weight="700" fill="#27ae60">XIAO ESP32S3 Plus</text>
+  <line x1="75" y1="105" x2="275" y2="105" stroke="#27ae60" stroke-width="1"/>
+
+  <!-- XIAO pin labels (board silkscreen D## primary, GPIO in parens) -->
+  <g font-size="12" fill="#1a1a1a">
+    <text x="280" y="140" text-anchor="end">D6 (TX)</text>
+    <text x="280" y="175" text-anchor="end">D7 (RX)</text>
+    <text x="280" y="210" text-anchor="end">3V3</text>
+    <text x="280" y="245" text-anchor="end">GND</text>
+  </g>
+  <g fill="#27ae60">
+    <circle cx="290" cy="137" r="4"/>
+    <circle cx="290" cy="172" r="4"/>
+    <circle cx="290" cy="207" r="4"/>
+    <circle cx="290" cy="242" r="4"/>
+  </g>
+
+  <!-- ATGM336H GPS -->
+  <rect x="530" y="70" width="220" height="200" rx="10" fill="#eaf2fb" stroke="#2980b9" stroke-width="2"/>
+  <text x="640" y="95" text-anchor="middle" font-size="14" font-weight="700" fill="#2980b9">ATGM336H GPS</text>
+  <line x1="545" y1="105" x2="735" y2="105" stroke="#2980b9" stroke-width="1"/>
+
+  <g font-size="12" fill="#1a1a1a">
+    <text x="540" y="140" text-anchor="start">RX</text>
+    <text x="540" y="175" text-anchor="start">TX</text>
+    <text x="540" y="210" text-anchor="start">VCC</text>
+    <text x="540" y="245" text-anchor="start">GND</text>
+  </g>
+  <g fill="#2980b9">
+    <circle cx="530" cy="137" r="4"/>
+    <circle cx="530" cy="172" r="4"/>
+    <circle cx="530" cy="207" r="4"/>
+    <circle cx="530" cy="242" r="4"/>
+  </g>
+
+  <!-- Wires -->
+  <!-- D6 -> RX -->
+  <line x1="290" y1="137" x2="530" y2="137" stroke="#c0392b" stroke-width="2"/>
+  <polygon points="520,133 530,137 520,141" fill="#c0392b"/>
+  <text x="410" y="130" text-anchor="middle" font-size="10" fill="#c0392b">UART TX → RX</text>
+
+  <!-- D7 <- TX -->
+  <line x1="290" y1="172" x2="530" y2="172" stroke="#c0392b" stroke-width="2"/>
+  <polygon points="300,168 290,172 300,176" fill="#c0392b"/>
+  <text x="410" y="165" text-anchor="middle" font-size="10" fill="#c0392b">UART RX ← TX</text>
+
+  <!-- 3V3 -> VCC -->
+  <line x1="290" y1="207" x2="530" y2="207" stroke="#e67e22" stroke-width="2.5"/>
+  <polygon points="520,202 530,207 520,212" fill="#e67e22"/>
+  <text x="410" y="200" text-anchor="middle" font-size="10" fill="#e67e22" font-weight="600">+3.3V Power</text>
+
+  <!-- GND -> GND -->
+  <line x1="290" y1="242" x2="530" y2="242" stroke="#333" stroke-width="2.5"/>
+  <polygon points="520,237 530,242 520,247" fill="#333"/>
+  <text x="410" y="235" text-anchor="middle" font-size="10" fill="#333" font-weight="600">Ground</text>
+
+  <!-- Sleep-mode note -->
+  <text x="410" y="310" text-anchor="middle" font-size="11" fill="#555">
+    Power management is software-only: the firmware sends a
+    <tspan font-family="ui-monospace, SFMono-Regular, Menlo, monospace" fill="#1a1a1a">$PMTK161,0</tspan>
+    backup-mode command over UART before deep sleep.
+  </text>
+
+  <!-- Legend -->
+  <g font-size="11" fill="#1a1a1a">
+    <rect x="100" y="335" width="16" height="4" fill="#c0392b"/>
+    <text x="122" y="340">UART data</text>
+
+    <rect x="250" y="335" width="16" height="4" fill="#e67e22"/>
+    <text x="272" y="340">+3.3V power</text>
+
+    <rect x="400" y="335" width="16" height="4" fill="#333"/>
+    <text x="422" y="340">Ground</text>
+  </g>
+</svg>

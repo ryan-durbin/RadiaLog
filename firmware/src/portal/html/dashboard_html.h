@@ -133,6 +133,7 @@ background:linear-gradient(90deg,var(--primary),var(--secondary));opacity:0.6}
     <a href="/debug">Debug</a>
     <a href="/settings">Settings</a>
     <a href="/data">Data</a>
+    <a href="/self-test">Self-Test</a>
   </div>
   <div class="nav-status">
     <span class="dot dot-gray" id="nav-wifi" title="WiFi"></span>

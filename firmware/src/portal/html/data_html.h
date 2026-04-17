@@ -47,6 +47,7 @@ tr:hover td{background:#161b22}
     <a href="/debug">Debug</a>
     <a href="/settings">Settings</a>
     <a href="/data" class="active">Data</a>
+    <a href="/self-test">Self-Test</a>
   </div>
   <div class="nav-status" style="cursor:pointer">
     <span class="dot dot-gray" id="nav-wifi" title="WiFi"></span>

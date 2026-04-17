@@ -1,5 +1,6 @@
 #include "atgm336h.h"
 #include "../config.h"
+#include "driver/gpio.h"
 
 // =============================================================================
 // RadiaLog Firmware - ATGM336H GPS Driver Implementation
@@ -26,8 +27,9 @@ ATGM336H::ATGM336H(HardwareSerial& serial, int txPin, int rxPin, uint32_t baud)
 
 void ATGM336H::begin() {
 #ifdef GPS_POWER_PIN
-    // Drive ATGM336H Pin 5 (ON/OFF) HIGH to enable the module.
-    // External 10k pulldown to GND keeps it off until we explicitly assert HIGH.
+    // Release any deep-sleep pad hold set by a prior shutdown() so we can
+    // drive the pin again on this boot.
+    gpio_hold_dis((gpio_num_t)GPS_POWER_PIN);
     pinMode(GPS_POWER_PIN, OUTPUT);
     digitalWrite(GPS_POWER_PIN, HIGH);
     delay(50);   // Allow the GPS RF/frontend to come up before opening UART
@@ -36,12 +38,32 @@ void ATGM336H::begin() {
 }
 
 void ATGM336H::shutdown() {
-    // Stop the UART so we don't waste cycles draining a dead module.
+    // Try several candidate sleep commands — the AT6558 inside the ATGM336H
+    // has inconsistent documentation and implementations across firmware
+    // revisions, so we fire each one speculatively. Whichever the module
+    // actually recognises will drop it into a low-power state; the rest are
+    // harmless no-ops. Remove commands that are confirmed unused later.
+    const char* const sleepCmds[] = {
+        "$PMTK161,0*28\r\n",   // MTK "StandbyMode"
+        "$PMTK225,4*2F\r\n",   // MTK "Backup Mode"
+        "$PCAS12,0*1E\r\n",    // AT6558 candidate standby
+    };
+    for (const char* cmd : sleepCmds) {
+        _serial.print(cmd);
+        _serial.flush();
+        delay(30);
+    }
+    delay(100);        // give the module a moment to act on whichever stuck
     _serial.end();
+
 #ifdef GPS_POWER_PIN
-    // Drive ON/OFF LOW — internal pulldown then keeps it LOW after deep sleep
-    // when the ESP32 GPIO floats, so the GPS stays fully powered down.
     digitalWrite(GPS_POWER_PIN, LOW);
+    // Latch the pad LOW through deep sleep. Without this the IO driver
+    // powers down when the ESP32 sleeps, the pin goes high-Z, and the
+    // ATGM336H's internal pullup pulls the ON/OFF line HIGH — which would
+    // re-enable the GPS and burn ~25 mA while the MCU is asleep.
+    gpio_hold_en((gpio_num_t)GPS_POWER_PIN);
+    gpio_deep_sleep_hold_en();
 #endif
 }
 

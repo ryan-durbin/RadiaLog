@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 300" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+  <rect width="820" height="300" fill="#ffffff"/>
+
+  <!-- Title -->
+  <text x="410" y="30" text-anchor="middle" font-size="16" font-weight="700" fill="#1a1a1a">Battery Voltage Divider (2× 200kΩ → D10 / A10)</text>
+
+  <!-- BAT+ terminal -->
+  <rect x="60" y="120" width="80" height="40" rx="6" fill="#fdecea" stroke="#c0392b" stroke-width="2"/>
+  <text x="100" y="145" text-anchor="middle" font-size="13" font-weight="700" fill="#c0392b">BAT+</text>
+
+  <!-- BAT- / GND terminal -->
+  <rect x="680" y="120" width="80" height="40" rx="6" fill="#eee" stroke="#333" stroke-width="2"/>
+  <text x="720" y="140" text-anchor="middle" font-size="12" font-weight="700" fill="#333">BAT− / GND</text>
+  <text x="720" y="154" text-anchor="middle" font-size="10" fill="#555">(same net)</text>
+
+  <!-- Wire BAT+ to R1 -->
+  <line x1="140" y1="140" x2="240" y2="140" stroke="#c0392b" stroke-width="2.5"/>
+
+  <!-- R1 resistor -->
+  <g stroke="#1a1a1a" stroke-width="2" fill="none">
+    <polyline points="240,140 248,130 264,150 280,130 296,150 312,130 328,150 336,140"/>
+  </g>
+  <text x="288" y="120" text-anchor="middle" font-size="12" font-weight="700">R1 = 200kΩ</text>
+
+  <!-- Midpoint tap -->
+  <circle cx="410" cy="140" r="5" fill="#1a1a1a"/>
+  <line x1="336" y1="140" x2="410" y2="140" stroke="#1a1a1a" stroke-width="2.5"/>
+
+  <!-- R2 resistor -->
+  <g stroke="#1a1a1a" stroke-width="2" fill="none">
+    <polyline points="484,140 492,130 508,150 524,130 540,150 556,130 572,150 580,140"/>
+  </g>
+  <line x1="410" y1="140" x2="484" y2="140" stroke="#1a1a1a" stroke-width="2.5"/>
+  <text x="532" y="120" text-anchor="middle" font-size="12" font-weight="700">R2 = 200kΩ</text>
+
+  <!-- Wire to BAT- -->
+  <line x1="580" y1="140" x2="680" y2="140" stroke="#333" stroke-width="2.5"/>
+
+  <!-- Tap wire down to GPIO9 -->
+  <line x1="410" y1="140" x2="410" y2="220" stroke="#2980b9" stroke-width="2.5"/>
+  <polygon points="406,210 410,220 414,210" fill="#2980b9"/>
+
+  <!-- ADC node -->
+  <rect x="340" y="220" width="140" height="40" rx="6" fill="#eaf2fb" stroke="#2980b9" stroke-width="2"/>
+  <text x="410" y="240" text-anchor="middle" font-size="13" font-weight="700" fill="#2980b9">D10 / A10</text>
+  <text x="410" y="254" text-anchor="middle" font-size="10" fill="#2980b9">(GPIO9 — ADC input)</text>
+
+  <!-- Voltage labels -->
+  <text x="100" y="180" text-anchor="middle" font-size="11" fill="#555">~3.0–4.2V</text>
+  <text x="410" y="180" text-anchor="middle" font-size="11" fill="#2980b9" font-weight="700">½ × V<tspan font-size="9">BAT</tspan> (~1.5–2.1V)</text>
+  <text x="720" y="180" text-anchor="middle" font-size="11" fill="#555">0V</text>
+</svg>
