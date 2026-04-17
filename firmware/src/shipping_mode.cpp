@@ -1,5 +1,7 @@
 #include "shipping_mode.h"
 
+volatile uint32_t g_buttonPressCount = 0;
+
 ShippingMode::ShippingMode()
     : _sleepRequested(false)
     , _buttonDown(false)
@@ -42,8 +44,11 @@ void ShippingMode::update() {
         _buttonDown   = true;
         _pressStartMs = now;
     } else if (!pressed && _buttonDown) {
-        // Button released before threshold
+        // Button released before threshold — counts as a short press
         _buttonDown   = false;
+        if (_pressStartMs > 0 && (now - _pressStartMs) < SHIPPING_MODE_HOLD_MS) {
+            g_buttonPressCount++;
+        }
         _pressStartMs = 0;
     }
 

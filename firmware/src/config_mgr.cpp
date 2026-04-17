@@ -283,6 +283,22 @@ bool ConfigMgr::loadFromNVS() {
     return true;
 }
 
+bool ConfigMgr::factoryReset() {
+    Preferences prefs;
+    bool nvsCleared = false;
+    if (prefs.begin(NVS_NAMESPACE, false)) {
+        nvsCleared = prefs.clear();
+        prefs.end();
+    }
+
+    bool fileRemoved = true;
+    if (LittleFS.begin(true) && LittleFS.exists(CONFIG_FILE)) {
+        fileRemoved = LittleFS.remove(CONFIG_FILE);
+    }
+
+    return nvsCleared && fileRemoved;
+}
+
 // --- Getters ----------------------------------------------------------------
 
 int ConfigMgr::getWifiCount() const {

@@ -3,6 +3,11 @@
 #include <Arduino.h>
 #include "config.h"
 
+// Short-press counter on BOOT_BUTTON_PIN. Incremented when the button is
+// released before the shipping-mode hold threshold. Used by the self-test
+// page in the captive portal to confirm the boot button works.
+extern volatile uint32_t g_buttonPressCount;
+
 // =============================================================================
 // ShippingMode — GPIO0 long-press detection for deep-sleep entry
 //

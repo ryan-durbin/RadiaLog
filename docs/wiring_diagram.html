@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>RadiaLog — Wiring Diagram</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --ink: #1a1a1a;
+    --muted: #555;
+    --accent: #c0392b;
+    --gps: #2980b9;
+    --mcu: #27ae60;
+    --pwr: #e67e22;
+    --gnd: #333;
+    --card: #fafafa;
+    --border: #ddd;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    margin: 0;
+    padding: 24px 32px;
+    line-height: 1.5;
+  }
+  header { border-bottom: 2px solid var(--ink); padding-bottom: 10px; margin-bottom: 24px; }
+  h1 { margin: 0 0 4px; font-size: 26px; }
+  h2 { margin: 28px 0 10px; font-size: 18px; border-left: 4px solid var(--accent); padding-left: 10px; }
+  .subtitle { color: var(--muted); font-size: 13px; }
+  .section { page-break-inside: avoid; margin-bottom: 28px; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 16px 20px;
+  }
+  table.pins { border-collapse: collapse; width: 100%; font-size: 13px; margin-top: 10px; }
+  table.pins th, table.pins td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; }
+  table.pins th { background: #efefef; }
+  code {
+    background: #eee; padding: 1px 5px; border-radius: 3px;
+    font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+    font-size: 13px;
+  }
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; margin-top: 10px; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .swatch { width: 14px; height: 4px; border-radius: 2px; display: inline-block; }
+  ul.notes { margin: 8px 0 0 0; padding-left: 20px; font-size: 13px; }
+  ul.notes li { margin-bottom: 4px; }
+  .callout {
+    background: #fff6e6; border-left: 4px solid var(--pwr);
+    padding: 10px 14px; border-radius: 4px; font-size: 13px; margin-top: 10px;
+  }
+  @media print {
+    body { padding: 12mm; }
+    .section { page-break-inside: avoid; }
+    header { border-bottom: 1.5px solid #000; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>RadiaLog — Wiring Diagram</h1>
+  <div class="subtitle">XIAO ESP32S3 Plus · ATGM336H GPS · 18650 Battery Voltage Divider</div>
+</header>
+
+<!-- ========== GPS WIRING ========== -->
+<section class="section">
+  <h2>1. GPS Module (ATGM336H)</h2>
+  <div class="card">
+    <svg viewBox="0 0 780 280" width="100%" style="max-width: 780px; display: block; margin: 0 auto;" xmlns="http://www.w3.org/2000/svg">
+      <!-- XIAO ESP32S3 Plus -->
+      <rect x="40" y="60" width="230" height="200" rx="10" fill="#eafaf1" stroke="#27ae60" stroke-width="2"/>
+      <text x="155" y="85" text-anchor="middle" font-size="14" font-weight="700" fill="#27ae60">XIAO ESP32S3 Plus</text>
+      <line x1="55" y1="95" x2="255" y2="95" stroke="#27ae60" stroke-width="1"/>
+
+      <g font-size="12" fill="#1a1a1a">
+        <text x="260" y="130" text-anchor="end">D6 (TX)</text>
+        <text x="260" y="165" text-anchor="end">D7 (RX)</text>
+        <text x="260" y="200" text-anchor="end">3V3</text>
+        <text x="260" y="235" text-anchor="end">GND</text>
+      </g>
+      <g fill="#27ae60">
+        <circle cx="270" cy="127" r="4"/>
+        <circle cx="270" cy="162" r="4"/>
+        <circle cx="270" cy="197" r="4"/>
+        <circle cx="270" cy="232" r="4"/>
+      </g>
+
+      <!-- ATGM336H GPS -->
+      <rect x="510" y="60" width="220" height="200" rx="10" fill="#eaf2fb" stroke="#2980b9" stroke-width="2"/>
+      <text x="620" y="85" text-anchor="middle" font-size="14" font-weight="700" fill="#2980b9">ATGM336H GPS</text>
+      <line x1="525" y1="95" x2="715" y2="95" stroke="#2980b9" stroke-width="1"/>
+
+      <g font-size="12" fill="#1a1a1a">
+        <text x="520" y="130" text-anchor="start">RX</text>
+        <text x="520" y="165" text-anchor="start">TX</text>
+        <text x="520" y="200" text-anchor="start">VCC</text>
+        <text x="520" y="235" text-anchor="start">GND</text>
+      </g>
+      <g fill="#2980b9">
+        <circle cx="510" cy="127" r="4"/>
+        <circle cx="510" cy="162" r="4"/>
+        <circle cx="510" cy="197" r="4"/>
+        <circle cx="510" cy="232" r="4"/>
+      </g>
+
+      <!-- Wires -->
+      <line x1="270" y1="127" x2="510" y2="127" stroke="#c0392b" stroke-width="2"/>
+      <polygon points="500,123 510,127 500,131" fill="#c0392b"/>
+      <text x="390" y="120" text-anchor="middle" font-size="10" fill="#c0392b">UART TX → RX</text>
+
+      <line x1="270" y1="162" x2="510" y2="162" stroke="#c0392b" stroke-width="2"/>
+      <polygon points="280,158 270,162 280,166" fill="#c0392b"/>
+      <text x="390" y="155" text-anchor="middle" font-size="10" fill="#c0392b">UART RX ← TX</text>
+
+      <line x1="270" y1="197" x2="510" y2="197" stroke="#e67e22" stroke-width="2.5"/>
+      <polygon points="500,192 510,197 500,202" fill="#e67e22"/>
+      <text x="390" y="190" text-anchor="middle" font-size="10" fill="#e67e22" font-weight="600">+3.3V Power</text>
+
+      <line x1="270" y1="232" x2="510" y2="232" stroke="#333" stroke-width="2.5"/>
+      <polygon points="500,227 510,232 500,237" fill="#333"/>
+      <text x="390" y="225" text-anchor="middle" font-size="10" fill="#333" font-weight="600">Ground</text>
+    </svg>
+
+    <table class="pins">
+      <thead><tr><th>XIAO Pin (silkscreen)</th><th>GPIO</th><th>Direction</th><th>GPS Pin</th><th>Purpose</th></tr></thead>
+      <tbody>
+        <tr><td><code>D6</code> (TX)</td><td>GPIO43</td><td>→</td><td>RX</td><td>UART data to GPS</td></tr>
+        <tr><td><code>D7</code> (RX)</td><td>GPIO44</td><td>←</td><td>TX</td><td>UART data from GPS (NMEA)</td></tr>
+        <tr><td><code>3V3</code></td><td>—</td><td>→</td><td>VCC</td><td>Module power</td></tr>
+        <tr><td><code>GND</code></td><td>—</td><td>—</td><td>GND</td><td>Common ground</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout">
+      <strong>GPS sleep</strong> is handled in software. Before entering deep sleep,
+      the firmware sends the ATGM336H a <code>$PMTK161,0</code> backup-mode command
+      over UART, which drops its draw from ~25 mA to roughly 10–50 µA while VCC stays
+      applied. No hardware power-control pin is required.
+    </div>
+
+    <div class="legend">
+      <span><span class="swatch" style="background:#c0392b"></span> UART data</span>
+      <span><span class="swatch" style="background:#e67e22"></span> +3.3V power</span>
+      <span><span class="swatch" style="background:#333"></span> Ground</span>
+    </div>
+  </div>
+</section>
+
+<!-- ========== BATTERY DIVIDER ========== -->
+<section class="section">
+  <h2>2. Battery Voltage Divider</h2>
+  <div class="card">
+    <svg viewBox="0 0 780 260" width="100%" style="max-width: 780px; display: block; margin: 0 auto;" xmlns="http://www.w3.org/2000/svg">
+      <!-- BAT+ terminal -->
+      <rect x="40" y="100" width="80" height="40" rx="6" fill="#fdecea" stroke="#c0392b" stroke-width="2"/>
+      <text x="80" y="125" text-anchor="middle" font-size="13" font-weight="700" fill="#c0392b">BAT+</text>
+
+      <!-- BAT- / GND terminal -->
+      <rect x="660" y="100" width="80" height="40" rx="6" fill="#eee" stroke="#333" stroke-width="2"/>
+      <text x="700" y="120" text-anchor="middle" font-size="12" font-weight="700" fill="#333">BAT− / GND</text>
+      <text x="700" y="134" text-anchor="middle" font-size="10" fill="#555">(same net)</text>
+
+      <!-- Wire from BAT+ to R1 -->
+      <line x1="120" y1="120" x2="220" y2="120" stroke="#c0392b" stroke-width="2.5"/>
+
+      <!-- R1 resistor (200k) -->
+      <g stroke="#1a1a1a" stroke-width="2" fill="none">
+        <polyline points="220,120 228,110 244,130 260,110 276,130 292,110 308,130 316,120"/>
+      </g>
+      <text x="268" y="100" text-anchor="middle" font-size="12" font-weight="700">R1 = 200kΩ</text>
+
+      <!-- Midpoint tap -->
+      <circle cx="390" cy="120" r="5" fill="#1a1a1a"/>
+      <line x1="316" y1="120" x2="390" y2="120" stroke="#1a1a1a" stroke-width="2.5"/>
+
+      <!-- R2 resistor -->
+      <g stroke="#1a1a1a" stroke-width="2" fill="none">
+        <polyline points="464,120 472,110 488,130 504,110 520,130 536,110 552,130 560,120"/>
+      </g>
+      <line x1="390" y1="120" x2="464" y2="120" stroke="#1a1a1a" stroke-width="2.5"/>
+      <text x="512" y="100" text-anchor="middle" font-size="12" font-weight="700">R2 = 200kΩ</text>
+
+      <!-- Wire to BAT- -->
+      <line x1="560" y1="120" x2="660" y2="120" stroke="#333" stroke-width="2.5"/>
+
+      <!-- Tap wire down to GPIO9 -->
+      <line x1="390" y1="120" x2="390" y2="200" stroke="#2980b9" stroke-width="2.5"/>
+      <polygon points="386,190 390,200 394,190" fill="#2980b9"/>
+
+      <!-- GPIO9 node -->
+      <rect x="320" y="200" width="140" height="40" rx="6" fill="#eaf2fb" stroke="#2980b9" stroke-width="2"/>
+      <text x="390" y="220" text-anchor="middle" font-size="13" font-weight="700" fill="#2980b9">D10 / A10</text>
+      <text x="390" y="234" text-anchor="middle" font-size="10" fill="#2980b9">(GPIO9 — ADC input)</text>
+
+      <!-- Voltage labels -->
+      <text x="80" y="160" text-anchor="middle" font-size="11" fill="#555">~3.0–4.2V</text>
+      <text x="390" y="160" text-anchor="middle" font-size="11" fill="#2980b9" font-weight="700">½ × V<tspan font-size="9">BAT</tspan> (~1.5–2.1V)</text>
+      <text x="700" y="160" text-anchor="middle" font-size="11" fill="#555">0V</text>
+    </svg>
+
+    <ul class="notes">
+      <li>Two matching 100kΩ through 220 kΩ resistors in series between BAT+ and GND halve the battery voltage.</li>
+      <li>Midpoint tap feeds <code>D10 / A10</code> (GPIO9), within the ESP32 ADC range.</li>
+      <li>High resistance = negligible drain (~10 µA).</li>
+      <li>BAT− is the same net as GND — you can run the divider directly across the battery terminals.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ========== POWER STATES ========== -->
+<section class="section">
+  <h2>3. GPS Power States at a Glance</h2>
+  <div class="card">
+    <table class="pins">
+      <thead><tr><th>State</th><th>ATGM336H</th><th>Approx. current</th></tr></thead>
+      <tbody>
+        <tr><td>Normal run (tracking)</td><td>ON</td><td>~25 mA</td></tr>
+        <tr><td>Deep sleep / shipping mode (after <code>$PMTK161,0</code>)</td><td>Backup</td><td>~10–50 µA</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<footer style="margin-top: 30px; font-size: 11px; color: var(--muted); border-top: 1px solid var(--border); padding-top: 10px;">
+  Source: <code>README.md</code> — branch <code>feat/gps-power-control</code>. Print to PDF via your browser (Ctrl/Cmd + P → Save as PDF).
+</footer>
+
+</body>
+</html>

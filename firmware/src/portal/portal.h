@@ -17,6 +17,10 @@
 // =============================================================================
 extern volatile bool g_shutdownRequested;
 
+// Self-test display wake — set by POST /api/actions/display-test, consumed
+// in main loop on boards where HAS_DISPLAY is defined.
+extern volatile bool g_displayTestRequested;
+
 // =============================================================================
 // RadiaLog Firmware - Status Portal
 // Async web server providing device status, log streaming, config UI,

@@ -75,6 +75,10 @@ public:
     /// Load critical settings from NVS. Returns true if NVS had data.
     bool loadFromNVS();
 
+    /// Wipe all persisted config: NVS namespace and /config.json.
+    /// Caller is expected to reboot afterward; in-memory state is not reset.
+    bool factoryReset();
+
     static constexpr int MAX_WIFI = 4;
     static constexpr int MAX_BLE_DEVICES = 4;
 

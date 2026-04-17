@@ -1,10 +1,12 @@
 #include "portal.h"
 #include "../config.h"
+#include "../shipping_mode.h"
 #include "debug_ws.h"
 #include "html/dashboard_html.h"
 #include "html/debug_html.h"
 #include "html/settings_html.h"
 #include "html/data_html.h"
+#include "html/selftest_html.h"
 #include "html/templates_js.h"
 #include <ArduinoJson.h>
 #include <LittleFS.h>
@@ -17,6 +19,7 @@
 // Shutdown flag — set by POST /api/actions/shutdown, read in main loop
 // =============================================================================
 volatile bool g_shutdownRequested = false;
+volatile bool g_displayTestRequested = false;
 
 // --- BLE scan state (shared between request handlers and scan task) ----------
 struct BleScanEntry {
@@ -123,6 +126,10 @@ void StatusPortal::_registerRoutes() {
 
     _server->on("/data", HTTP_GET, [](AsyncWebServerRequest* request) {
         request->send_P(200, "text/html", DATA_HTML);
+    });
+
+    _server->on("/self-test", HTTP_GET, [](AsyncWebServerRequest* request) {
+        request->send_P(200, "text/html", SELFTEST_HTML);
     });
 
     _server->on("/templates.js", HTTP_GET, [](AsyncWebServerRequest* request) {
@@ -338,6 +345,28 @@ void StatusPortal::_registerRoutes() {
         LittleFS.remove("/readings_idx.bin");
         _buf->begin();
         request->send(200, "application/json", "{\"success\":true,\"message\":\"Buffer cleared\"}");
+    });
+
+    _server->on("/api/actions/display-test", HTTP_POST, [](AsyncWebServerRequest* request) {
+#ifdef HAS_DISPLAY
+        g_displayTestRequested = true;
+        request->send(200, "application/json",
+            "{\"success\":true,\"has_display\":true,\"message\":\"Display wake requested\"}");
+#else
+        request->send(200, "application/json",
+            "{\"success\":false,\"has_display\":false,\"message\":\"No display on this board\"}");
+#endif
+    });
+
+    _server->on("/api/actions/factory-reset", HTTP_POST, [this](AsyncWebServerRequest* request) {
+        LittleFS.remove("/readings.bin");
+        LittleFS.remove("/readings_status.bin");
+        LittleFS.remove("/readings_idx.bin");
+        _cfg->factoryReset();
+        request->send(200, "application/json",
+            "{\"success\":true,\"message\":\"Factory reset complete, rebooting...\"}");
+        delay(500);
+        ESP.restart();
     });
 
     // POST /api/actions/verify-token — verify a device token against RadiaMaps
@@ -670,6 +699,9 @@ void StatusPortal::_handleApiStatus(AsyncWebServerRequest* request) {
 
     // WiFi AP
     doc["ap_active"] = _wifi->isAPActive();
+
+    // Boot button press counter (used by self-test page to confirm button works)
+    doc["button_press_count"] = g_buttonPressCount;
 
     // Time
     doc["time_synced"] = _timeSyncSource.length() > 0;
