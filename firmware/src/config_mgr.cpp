@@ -1,4 +1,5 @@
 #include "config_mgr.h"
+#include "config.h"
 #include <LittleFS.h>
 #include <ArduinoJson.h>
 #include <WiFi.h>
@@ -27,7 +28,7 @@ ConfigMgr::ConfigMgr()
     , _deviceId(buildDefaultDeviceId())
     , _deviceName("RadiaLog")
     , _readingIntervalMs(2000)
-    , _apPassword("")
+    , _apPassword(AP_PASSWORD)
     , _googleApiKey("")
     , _displayTimeoutSec(0)
     , _buttonWakeEnabled(true)
