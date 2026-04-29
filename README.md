@@ -39,12 +39,25 @@ Connect to a RadiaCode via Bluetooth and RadiaLog automatically logs dose rate a
 
 ![GPS wiring diagram](img/wiring_gps.svg)
 
+#### Option A — Simple (Recommended)
+
 | XIAO Pin (silkscreen) | GPIO | Direction | GPS Pin | Purpose |
 |---|---|:---:|---|---|
 | `D6` (TX) | GPIO43 | → | RX | UART data to GPS |
 | `D7` (RX) | GPIO44 | ← | TX | UART data from GPS (NMEA) |
 | `3V3` | — | → | VCC | Module power |
 | `GND` | — | — | GND | Common ground |
+
+#### Option B — GPIO Power Control (Advanced)
+
+| XIAO Pin (silkscreen) | GPIO | Direction | GPS Pin | Purpose |
+|---|---|:---:|---|---|
+| `D6` (TX) | GPIO43 | → | RX | UART data to GPS |
+| `D7` (RX) | GPIO44 | ← | TX | UART data from GPS (NMEA) |
+| `D14`, `D4`, `D15`, `D5` | 41, 5, 42, 6 | → | VCC | Switchable power rail (bridged together) |
+| — | — | — | GND | Common ground |
+
+> **Option B** requires advanced soldering skills. Four GPIO pins on the same side of the board are bridged together and connected to GPS VCC. The firmware drives them HIGH on boot and LOW with hold enabled before deep sleep, cutting ~25 mA GPS drain to effectively 0 µA. Pins D4/D5 share the I2C bus (unused since no display/I2C device is planned).
 
 > **Pin labels:** RadiaLog uses the Seeed XIAO's silkscreened `D##` labels as primary — those are what you'll see printed on the board when soldering. The GPIO column maps to the firmware's internal numbering for cross-referencing `firmware/src/config.h`.
 
@@ -54,25 +67,23 @@ Connect to a RadiaCode via Bluetooth and RadiaLog automatically logs dose rate a
 
 The ATGM336H draws ~25 mA continuously while tracking, so RadiaLog powers
 it down before entering shipping mode. Two strategies are used depending on
-whether the board exposes the module's ON/OFF line:
+wiring:
 
-- **Hardware cut (preferred)** — on boards where the GPS ON/OFF pin is
-  broken out to an MCU GPIO (e.g. `BOARD_XIAO_ESP32S3` via `GPS_POWER_PIN`),
-  the firmware drives the line LOW and latches the pad through deep sleep
-  with `gpio_hold_en()`. VCC still reaches the module, but the ATGM336H
-  enters full shutdown — essentially 0 mA draw. An external 10k pulldown
-  to GND keeps the line LOW at boot so the GPS stays off until the firmware
-  explicitly enables it.
-- **Software backup mode (fallback)** — on boards where the ON/OFF pin
-  isn't accessible (e.g. the stock ATGM336H breakout used with
-  `BOARD_XIAO_ESP32S3_PLUS`, which only exposes VCC/GND/TX/RX/PPS), the
-  firmware issues `$PMTK161,0` (and a couple of other AT6558 standby
-  candidates) over UART before sleeping. The module powers down its
-  receiver and RF front-end, dropping to roughly 10–50 µA while VCC stays
+- **Software backup mode (Option A — simple)** — when the GPS VCC is tied
+  directly to 3.3V, the firmware issues `$PMTK161,0` (and a couple of other
+  AT6558 standby candidates) over UART before sleeping. The module powers down
+  its receiver and RF front-end, dropping to roughly 10–50 µA while VCC stays
   applied — still low enough that a healthy cell sits for months.
 
-On wake, `ATGM336H::begin()` releases the pad hold (if any), drives
-`GPS_POWER_PIN` HIGH, and reopens UART — the module cold-starts and
+- **Hardware cut (Option B — advanced)** — when GPIO pins are wired as a
+  switchable power rail (`BOARD_XIAO_ESP32S3_PLUS` via `GPS_POWER_PIN_COUNT`),
+  the firmware drives all four pins LOW and latches them through deep sleep
+  with `gpio_hold_en()` + `gpio_deep_sleep_hold_en()`. VCC is physically cut
+  from the module — effectively 0 mA draw. On wake, `ATGM336H::begin()` drives
+  all power pins HIGH before opening UART — the module cold-starts normally.
+
+On wake, `ATGM336H::begin()` releases any prior pad hold (if applicable),
+drives power pins HIGH, and reopens UART — the module cold-starts and
 reacquires a fix normally.
 
 ### Battery Voltage Divider
@@ -110,7 +121,7 @@ Download the latest `.bin` file from the [Releases page](https://github.com/ryan
 4. Click **Install** and choose the `.bin` file you downloaded
 5. Wait for the flash to complete — that's it!
 
-> **Note:** If your board doesn't show up, you may need to hold the **BOOT** button while plugging in the USB cable to enter bootloader mode.
+> **Note:** If your board doesn't show up, you may need to hold the **boot button** (through the hole in the case side) while plugging in the USB cable to enter bootloader mode.
 
 ### OTA Updates
 
@@ -136,19 +147,29 @@ pio run -e seeed_xiao_esp32s3_plus --target upload
 > or read on-screen) that covers the steps below with captured images of
 > the portal and the RadiaMaps device-token flow.
 
-1. **Power on** the RadiaLog — press the reset button on the lid to start the setup AP
-2. **Connect** your phone or laptop to the `RadiaLog-XXXX` WiFi network (open network, no password)
-3. **Open** `http://10.0.0.1` in a browser — the dashboard loads
-4. **Go to Settings** and configure:
-   - Your home/mobile WiFi network (up to 4 networks)
-   - Your [RadiaMaps](https://radiamaps.com) device token (get one from your RadiaMaps account)
-   - (Optional) Device name, reading interval, AP password
-5. **Turn on** your RadiaCode — RadiaLog finds it via Bluetooth and starts logging automatically
+### Waking Up Your Device
+
+Your RadiaLog ships in **low-power shipping mode** (deep sleep) to conserve battery during storage and transit. To start it up:
+
+1. **Press the restart button** on the lid of the case — this resets the ESP32 and wakes it from deep sleep
+2. Wait ~5 seconds for the device to boot, initialize GPS, and broadcast its setup AP
+
+> **Two buttons on your RadiaLog:**
+> - **Restart button** (on the lid) — a regular push-button that resets the device. Use this to wake the device from shipping mode or reboot it at any time.
+> - **Boot button** (accessed through a small hole in the case side) — requires a toothpick, paperclip, or similar thin object to press. See [Shipping Mode](#shipping-mode) below for what this does.
+
+3. **Connect** your phone or laptop to the `RadiaLog-XXXX` WiFi network (password: `radialog`)
+4. **Open** `http://10.0.0.1` in a browser — the dashboard loads
+5. **Go to Settings** and configure:
+    - Your home/mobile WiFi network (up to 4 networks)
+    - Your [RadiaMaps](https://radiamaps.com) device token (get one from your RadiaMaps account)
+    - (Optional) Device name, reading interval, AP password
+6. **Turn on** your RadiaCode — RadiaLog finds it via Bluetooth and starts logging automatically
 
 That's it. Readings accumulate in the buffer and upload to RadiaMaps whenever WiFi is available.
 
 > **Heads-up:** the setup AP stays up for 5 minutes after wake. If it times
-> out before you finish, just tap the reset button again.
+> out before you finish, just tap the restart button again.
 
 ---
 
@@ -234,10 +255,22 @@ GPS Module ─────────────┘
 
 - **CPU runs at 80MHz** (down from 240MHz) — all peripherals use hardware clock dividers, unaffected
 - **Light sleep** kicks in during idle periods between readings (ESP-IDF automatic frequency scaling)
-- **WiFi AP auto-disables** after 5 minutes with no connected clients — saves 40-60mA. Hit the reset button to bring it back.
+- **WiFi AP auto-disables** after 5 minutes with no connected clients while STA is online — saves 40-60mA. If home WiFi drops, the AP comes back and stays available as the recovery path.
 - **WIFI_PS_MIN_MODEM** enabled — radio sleeps between DTIM beacons in STA mode
-- **Shipping mode** — hold the boot button for 5 seconds for deep sleep (negligible power draw)
-- **GPS backup mode** — before entering deep sleep, the firmware sends the ATGM336H a `$PMTK161,0` command to drop it into backup mode (~10–50 µA, down from ~25 mA). See [GPS Sleep Mode](#gps-sleep-mode) for details.
+- **Shipping mode** — press and hold the boot button (through the hole in the case side) for 5–10 seconds to enter deep sleep. The LED flashes three times as confirmation, then the device draws negligible power (~10 µA). Tap the restart button on the lid to wake it up again.
+- **GPS backup mode** — before entering deep sleep, the firmware sends the ATGM336H a `$PMTK161,0` command (Option A) or cuts VCC via GPIO hold (Option B), dropping GPS draw from ~25 mA to ~10–50 µA (A) or ~0 µA (B). See [GPS Sleep Mode](#gps-sleep-mode) for details.
+
+### Shipping Mode
+
+Your RadiaLog can enter a deep-sleep state for extended storage or when not in use. To activate it:
+
+1. Press and hold the **boot button** (through the hole in the case side) for 5–10 seconds
+2. The status LED flashes three times as confirmation
+3. The device enters deep sleep — power draw drops to ~10 µA
+
+To wake up from shipping mode, simply tap the **restart button** on the lid. The device boots normally and broadcasts its setup AP after ~5 seconds.
+
+> **Why ship in this state?** Shipping mode prevents battery drain during storage and transit. It also protects against accidental Bluetooth connections to nearby RadiaCodes while the device is being moved or stored.
 
 ### Buffer Resilience
 
@@ -277,7 +310,7 @@ RadiaLog uploads readings in batches of up to 250 per request. Each reading incl
 
 ### RadiaCode won't connect via Bluetooth
 - Make sure your RadiaCode is powered on and not connected to the RadiaCode app on your phone (althorugh the RaidaCode should be able to broadcast to multiple devices)
-- Press reset button on RadiaLog and log back into the webd dashboard
+- Press the restart button on RadiaLog and log back into the web dashboard
 - If using specific MAC addresses in settings, verify they're correct via the BLE scan feature
 
 ### No GPS fix
@@ -292,8 +325,9 @@ RadiaLog uploads readings in batches of up to 250 per request. Each reading incl
 - Uploads are scheduled once daily — use "Force Upload" in the portal for immediate upload
 
 ### Can't connect to RadiaLog WiFi
-- The AP auto-disables after 5 minutes with no clients to save power
-- Press the **reset button** on the board to restart and bring the AP back
+- The AP auto-disables after 5 minutes with no clients while RadiaLog is connected to home WiFi
+- If home WiFi drops, the AP should come back automatically and stay available as the recovery path
+- Press the **restart button** on the lid to reboot and bring the AP back
 - Default SSID is `RadiaLog-XXXX` (last 4 hex digits of the board's MAC address)
 
 ### Battery reading shows N/A

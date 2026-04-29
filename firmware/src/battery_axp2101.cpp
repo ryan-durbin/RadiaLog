@@ -36,6 +36,58 @@ void BatteryAXP2101::begin(TwoWire& wire, int sdaPin, int sclPin) {
     _pmu->enableBattVoltageMeasure();
     _pmu->enableBattDetection();
 
+#ifdef BOARD_WS_AMOLED_175
+    // Enable essential power rails for display panel (CO5300)
+    if (_pmu->enableDC1()) {
+        Serial.println(F("[Battery] DC1 enabled (display VCC 3.3V)"));
+    } else {
+        Serial.println(F("[Battery] WARNING: DC1 enable failed"));
+    }
+
+    // Enable ALDO1 for display backlight/panel logic
+    if (_pmu->enableALDO1()) {
+        Serial.println(F("[Battery] ALDO1 enabled (backlight VCC 3.3V)"));
+    } else {
+        Serial.println(F("[Battery] WARNING: ALDO1 enable failed"));
+    }
+
+    // Enable BLDO1 for touch IC power
+    if (_pmu->enableBLDO1()) {
+        Serial.println(F("[Battery] BLDO1 enabled (touch VCC 3.3V)"));
+    } else {
+        Serial.println(F("[Battery] WARNING: BLDO1 enable failed"));
+    }
+
+    // Enable DCDC2 for panel VCI power
+    if (_pmu->enableDC2()) {
+        Serial.println(F("[Battery] DC2 enabled (panel VCI 3.3V)"));
+    } else {
+        Serial.println(F("[Battery] WARNING: DC2 enable failed"));
+    }
+
+    // Enable DCDC4 for GPS power
+    if (_pmu->enableDC4()) {
+        Serial.println(F("[Battery] DC4 enabled (GPS VCC 3.3V)"));
+    } else {
+        Serial.println(F("[Battery] WARNING: DC4 enable failed"));
+    }
+
+    // Enable ALDO2 for SD card power
+    if (_pmu->enableALDO2()) {
+        Serial.println(F("[Battery] ALDO2 enabled (SD VCC 3.3V)"));
+    } else {
+        Serial.println(F("[Battery] WARNING: ALDO2 enable failed"));
+    }
+
+    // Enable CPUSLDO for additional logic power
+    if (_pmu->enableCPUSLDO()) {
+        Serial.println(F("[Battery] CPUSLDO enabled"));
+    } else {
+        Serial.println(F("[Battery] WARNING: CPUSLDO enable failed"));
+    }
+
+#endif // BOARD_WS_AMOLED_175
+
     Serial.println(F("[Battery] AXP2101 initialized."));
 }
 

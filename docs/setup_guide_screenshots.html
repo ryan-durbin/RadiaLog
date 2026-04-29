@@ -123,15 +123,15 @@ html, body {
   <div class="steps">
 
     <div class="step">
-      <h3><span class="num">1</span> Power On</h3>
-      <p>Plug in the USB-C cable to charge. The device powers on automatically and starts in setup mode.</p>
-      <p class="hint">A solid LED means the device is running. First boot may take ~10 seconds.</p>
+      <h3><span class="num">1</span> Wake the Device</h3>
+      <p>Your RadiaLog ships in deep sleep to save battery. Press the <b>restart button</b> on the lid of the case to wake it up.</p>
+      <p class="hint">The device has two buttons: restart (on the lid, push with your finger) and boot (through a small hole on the side, needs a toothpick). You only need the restart button for setup.</p>
     </div>
 
     <div class="step">
       <h3><span class="num">2</span> Join the Setup WiFi</h3>
-      <p>On your phone or laptop, open WiFi settings and join the network named <code>RadiaLog-XXXX</code> (XXXX matches your device).</p>
-      <p class="hint">No password by default. Your phone may show "no internet" — that's expected.</p>
+      <p>Wait ~5 seconds for the device to boot, then on your phone or laptop open WiFi settings and join the network named <code>RadiaLog-XXXX</code> (XXXX matches your device).</p>
+      <p class="hint">Password: <b>radialog</b>. Your phone may show "no internet" — that's expected.</p>
     </div>
 
     <div class="step">
@@ -200,18 +200,18 @@ html, body {
     <div>
       <h4>Troubleshooting</h4>
       <ul>
-        <li><b>No "RadiaLog-XXXX" WiFi?</b> Hold the boot button and re-plug power. Wait 30 seconds.</li>
+        <li><b>No "RadiaLog-XXXX" WiFi?</b> Press the restart button on the lid to reboot. Wait 5 seconds.</li>
         <li><b>Dashboard not loading?</b> Try <code>http://10.0.0.1</code> directly. Disable mobile data.</li>
         <li><b>RadiaCode not found?</b> Make sure it's powered on and within ~10 ft. Tap "Scan" again.</li>
         <li><b>No GPS fix?</b> GPS needs sky view. Place the device near a window for 1&ndash;2 minutes.</li>
-        <li><b>Shipping mode:</b> Hold the boot button for 5 seconds &mdash; LED blinks, device sleeps.</li>
+        <li><b>Shipping mode:</b> Hold the boot button (through the hole on the side) with a toothpick for 5 seconds &mdash; LED blinks, device sleeps. Press restart to wake it up.</li>
       </ul>
     </div>
     <div class="right">
       <h4>Resources</h4>
       <p><span class="url">radiamaps.com</span></p>
       <p><span class="url">github.com/<br>ryan-durbin/RadiaLog</span></p>
-      <p style="margin-top:6px;font-size:7pt">RadiaLog firmware v0.2.1<br>&copy; 2026 &mdash; printable one-sheet</p>
+      <p style="margin-top:6px;font-size:7pt">RadiaLog firmware v0.3.0<br>&copy; 2026 &mdash; printable one-sheet</p>
     </div>
   </div>
 

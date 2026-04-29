@@ -29,10 +29,19 @@ ReadingBuffer::ReadingBuffer()
 }
 
 bool ReadingBuffer::begin() {
-    // Mount LittleFS, format on first use if needed.
-    if (!LittleFS.begin(true)) {
-        return false;
-    }
+    
+    if (!LittleFS.begin(false)) {                                                                                                       
+           Serial.println("[BUFFER] LittleFS mount failed - likely first boot or storage issue");                                          
+           // Try to format once (first boot only)                                                                                         
+           LittleFS.format();                                                                                                              
+           if (!LittleFS.begin(false)) {                                                                                                   
+               Serial.println("[BUFFER] FATAL: Cannot mount LittleFS");                                                                    
+               return false;                                                                                                               
+           }                                                                                                                               
+           Serial.println("[BUFFER] LittleFS initialized (new or reformatted).");                                                          
+       } else {                                                                                                                            
+           Serial.println("[BUFFER] LittleFS mounted successfully.");                                                                      
+       }
 
     // Create /readings.bin if it does not exist.
     if (!LittleFS.exists(READINGS_FILE)) {

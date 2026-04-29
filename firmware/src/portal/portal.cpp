@@ -48,6 +48,7 @@ StatusPortal::StatusPortal()
     , _countRate(0.0f)
     , _batteryVoltage(0.0f)
     , _batteryPercent(0)
+    , _batteryCharging(false)
     , _timeSyncSource("")
     , _perfLoopAvgUs(0)
     , _perfLoopMaxUs(0)
@@ -86,9 +87,10 @@ void StatusPortal::updateReading(float doseRate, float countRate) {
     _countRate = countRate;
 }
 
-void StatusPortal::updateBattery(float voltage, uint8_t percent) {
-    _batteryVoltage = voltage;
-    _batteryPercent = percent;
+void StatusPortal::updateBattery(float voltage, uint8_t percent, bool charging) {
+    _batteryVoltage   = voltage;
+    _batteryPercent   = percent;
+    _batteryCharging  = charging;
 }
 
 void StatusPortal::setTimeSyncSource(const String& source) {
@@ -677,8 +679,9 @@ void StatusPortal::_handleApiStatus(AsyncWebServerRequest* request) {
     }
 
     // Battery
-    doc["battery_voltage"] = _batteryVoltage;
-    doc["battery_percent"] = _batteryPercent;
+    doc["battery_voltage"]   = _batteryVoltage;
+    doc["battery_percent"]   = _batteryPercent;
+    doc["battery_charging"]  = _batteryCharging;
 
     // Performance
     doc["cpu_mhz"]        = _perfCpuMHz;

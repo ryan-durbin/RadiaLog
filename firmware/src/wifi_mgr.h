@@ -9,8 +9,8 @@
 // =============================================================================
 // RadiaLog Firmware - WiFi Manager
 // Manages AP+STA dual mode (WIFI_AP_STA).
-// AP: broadcasts RadiaLog-XXXX, auto-disables after AP_AUTO_OFF_MS with no
-//     clients connected. Users hit reset to re-enable.
+// AP: broadcasts RadiaLog-XXXX. It auto-disables after AP_AUTO_OFF_MS with no
+//     clients only while STA is connected, and re-enables if STA is lost.
 // STA: connects to configured networks for data upload, auto-reconnects.
 //     Uses WIFI_PS_MIN_MODEM power saving when STA is connected.
 // =============================================================================
@@ -42,7 +42,7 @@ public:
     // Network configuration
     // -------------------------------------------------------------------------
 
-    /// Set up to 3 configured networks. Sorted by priority (lowest value first).
+    /// Set configured networks. Sorted by priority (lowest value first).
     void setNetworks(const std::vector<WifiCredentials>& networks);
 
     /// Attempt to connect to the highest-priority available network.
@@ -82,7 +82,8 @@ public:
     void registerOnDisconnect(WifiEventCallback cb);
 
 private:
-    void _setupAP(const String& password);
+    bool _setupAP(const String& password);
+    bool _enableAP();
     String _buildAPSsid();
 
     // WiFi event handler (static, registered with WiFi.onEvent)
@@ -103,11 +104,13 @@ private:
 
     // AP auto-shutdown: disable AP after AP_AUTO_OFF_MS with no clients
     bool          _apActive;
+    bool          _apEnablePending;
     unsigned long _apLastClientSeen;   // millis() when a client was last connected
+    String        _apPassword;
     void _checkAPAutoOff();
 
-    // Up to 3 networks, sorted by priority
-    static constexpr uint8_t MAX_NETWORKS = 3;
+    // Match ConfigMgr::MAX_WIFI: portal/settings allow four saved networks.
+    static constexpr uint8_t MAX_NETWORKS = 4;
     WifiCredentials _networks[MAX_NETWORKS];
     uint8_t _networkCount;
     uint8_t _currentNetworkIndex;  // index being tried in _networks[]

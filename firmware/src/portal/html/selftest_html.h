@@ -111,7 +111,8 @@ var TESTS = [
         var v=s.battery_voltage;
         if(v==null||isNaN(v))return {status:'fail',detail:'No reading'};
         var ok=v>=3.0&&v<=4.3;
-        return {status:ok?'pass':'fail',detail:v.toFixed(2)+' V ('+s.battery_percent+'%)'};
+        var chg=s.battery_charging?' (charging)':'';
+        return {status:ok?'pass':'fail',detail:v.toFixed(2)+' V ('+s.battery_percent+'%)'+chg};
       });
     }
   },

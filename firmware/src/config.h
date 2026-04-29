@@ -19,7 +19,7 @@
 // =============================================================================
 
 // Firmware version
-#define FW_VERSION      "0.2.3"
+#define FW_VERSION      "0.3.0"
 
 // =============================================================================
 // Board: Seeed XIAO ESP32S3 + Wio-SX1262  (no display)
@@ -47,15 +47,6 @@
 #define BATTERY_ADC_PIN       1
 #define BATTERY_DIVIDER_RATIO 2.0f
 
-// LoRa (Wio-SX1262) — reserved for future
-#define LORA_SCK_PIN    8
-#define LORA_MISO_PIN   9
-#define LORA_MOSI_PIN   10
-#define LORA_CS_PIN     41
-#define LORA_RST_PIN    42
-#define LORA_BUSY_PIN   40
-#define LORA_DIO1_PIN   39
-
 // No display on this board
 
 // =============================================================================
@@ -69,10 +60,15 @@
 #define GPS_BAUD        9600
 #define GPS_UART_NUM    1
 
-// No hardware GPS power control on this board — the stock ATGM336H breakout
-// used here exposes VCC/GND/TX/RX/PPS only, so the module's ON/OFF input
-// isn't accessible externally. Power management is done in software via a
-// PMTK backup-mode command in ATGM336H::shutdown().
+// GPS hardware power control — 4 GPIO pins (D4/D5/D14/D15 = GPIO 5/6/41/42)
+// tied together as a switchable VCC rail for the ATGM336H.  HIGH enables,
+// LOW shuts off.  Driven in begin() on every boot/reset and pulled LOW with
+// hold enabled before entering deep sleep in shipping mode.
+#define GPS_POWER_PIN_0       5
+#define GPS_POWER_PIN_1       6
+#define GPS_POWER_PIN_2       41
+#define GPS_POWER_PIN_3       42
+#define GPS_POWER_PIN_COUNT   4
 
 // Status LED (built-in, GPIO21)
 #define LED_PIN         21
@@ -206,7 +202,7 @@
 #define DISPLAY_WIDTH       466
 #define DISPLAY_HEIGHT      466
 #define DISPLAY_CIRCULAR    1
-#define DISPLAY_DRIVER_LGFX 1
+#define DISPLAY_DRIVER_ARDUINO_GFX 1
 // QSPI pins: SCLK=38, D0=4, D1=5, D2=6, D3=7, CS=12, RST=39, BL=47
 // (configured in display_gfx.h LovyanGFX class)
 #define TFT_BL_PIN          47
@@ -295,6 +291,7 @@
 #define AP_SSID_PREFIX      "RadiaLog"
 #define AP_CHANNEL          6
 #define AP_AUTO_OFF_MS      300000UL    // Disable AP after 5 min with no clients
+#define AP_PASSWORD         "radialog"
 #define PORTAL_IP           "10.0.0.1"
 
 // Serial debug

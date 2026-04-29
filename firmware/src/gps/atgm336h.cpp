@@ -25,8 +25,26 @@ ATGM336H::ATGM336H(HardwareSerial& serial, int txPin, int rxPin, uint32_t baud)
 {
 }
 
+#ifdef GPS_POWER_PIN_COUNT
+static int _gps_power_pin(int idx) {
+    switch (idx) {
+        case 0: return GPS_POWER_PIN_0;
+        case 1: return GPS_POWER_PIN_1;
+        case 2: return GPS_POWER_PIN_2;
+        case 3: return GPS_POWER_PIN_3;
+    }
+    return -1;
+}
+#endif
+
 void ATGM336H::begin() {
-#ifdef GPS_POWER_PIN
+#ifdef GPS_POWER_PIN_COUNT
+    for (int i = 0; i < GPS_POWER_PIN_COUNT; i++) {
+        pinMode(_gps_power_pin(i), OUTPUT);
+        digitalWrite(_gps_power_pin(i), HIGH);
+    }
+    delay(50);   // Allow the GPS RF/frontend to come up before opening UART
+#elif defined(GPS_POWER_PIN)
     // Release any deep-sleep pad hold set by a prior shutdown() so we can
     // drive the pin again on this boot.
     gpio_hold_dis((gpio_num_t)GPS_POWER_PIN);
@@ -56,7 +74,19 @@ void ATGM336H::shutdown() {
     delay(100);        // give the module a moment to act on whichever stuck
     _serial.end();
 
-#ifdef GPS_POWER_PIN
+#ifdef GPS_POWER_PIN_COUNT
+    for (int i = 0; i < GPS_POWER_PIN_COUNT; i++) {
+        digitalWrite(_gps_power_pin(i), LOW);
+    }
+    // Latch all pads LOW through deep sleep. Without this the IO drivers
+    // power down when the ESP32 sleeps, the pins go high-Z, and the
+    // ATGM336H's internal pullup pulls the VCC rail HIGH — which would
+    // re-enable the GPS and burn ~25 mA while the MCU is asleep.
+    for (int i = 0; i < GPS_POWER_PIN_COUNT; i++) {
+        gpio_hold_en((gpio_num_t)_gps_power_pin(i));
+    }
+    gpio_deep_sleep_hold_en();
+#elif defined(GPS_POWER_PIN)
     digitalWrite(GPS_POWER_PIN, LOW);
     // Latch the pad LOW through deep sleep. Without this the IO driver
     // powers down when the ESP32 sleeps, the pin goes high-Z, and the

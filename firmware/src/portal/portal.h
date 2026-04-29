@@ -39,8 +39,8 @@ public:
     /// Update latest radiation reading values (called from main loop).
     void updateReading(float doseRate, float countRate);
 
-    /// Update battery voltage (called from main loop).
-    void updateBattery(float voltage, uint8_t percent);
+    /// Update battery voltage and percentage (called from main loop).
+    void updateBattery(float voltage, uint8_t percent, bool charging = false);
 
     /// Update time sync status with source ("NTP" or "GPS").
     void setTimeSyncSource(const String& source);
@@ -63,6 +63,7 @@ private:
     volatile float   _countRate;
     volatile float   _batteryVoltage;
     volatile uint8_t _batteryPercent;
+    volatile bool    _batteryCharging;
     String           _timeSyncSource;  // "" = not synced, "NTP", "GPS"
 
     // Performance metrics

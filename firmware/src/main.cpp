@@ -35,6 +35,7 @@
 #include "display.h"
 #endif
 
+
 // =============================================================================
 // RadiaLog Firmware - Main Entry Point
 // Board: Seeed XIAO ESP32S3 or LilyGO T-Display S3
@@ -373,7 +374,7 @@ void loop() {
 
     // --- 5. Update portal live data ------------------------------------------
     portal.updateReading(dose_rate, count_rate);
-    portal.updateBattery(battery.getVoltage(), battery.getPercent());
+    portal.updateBattery(battery.getVoltage(), battery.getPercent(), battery.isCharging());
 
     // --- Time sync: NTP (preferred) or GPS fallback ---
     if (ntpSyncedFlag) {

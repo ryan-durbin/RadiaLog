@@ -1,0 +1,30 @@
+---
+Language: Cpp
+BasedOnStyle: LLVM
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+ColumnLimit: 120
+PointerAlignment: Left
+ReferenceAlignment: Separate
+AccessModifierOffset: -4
+ConstructorInitializerAllOnOneLine: false
+ConstructorInitializerIndentWidth: 4
+ContinuationIndentWidth: 4
+KeepEmptyLinesAtTheStartOfBlocks: true
+BreakBeforeBraces: LLVM
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortIfStatementsOnASingleLine: false
+AllowShortLoopsOnASingleLine: false
+SortIncludes: Ignore
+IncludeCategories:
+  - Regex: '^<.*\.h>'
+    Priority: 1
+  - Regex: '^<.*>'
+    Priority: 2
+  - Regex: '.*'
+    Priority: 3
+SpacesInAngles: false
+SpaceBeforeCtorInitializerColon: true
+SpaceAfterCtorInitializerColon: true
+Standard: cpp17

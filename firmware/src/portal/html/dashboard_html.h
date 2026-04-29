@@ -221,7 +221,7 @@ background:linear-gradient(90deg,var(--primary),var(--secondary));opacity:0.6}
       <div class="card-sm">
         <div class="card-title">Battery</div>
         <div class="card-value" id="batt-pct">—</div>
-        <div class="detail"><span id="batt-volts">—</span>V</div>
+        <div class="detail"><span id="batt-volts">—</span>V &nbsp;<span id="batt-charging" style="display:none;color:var(--success)">⚡ Charging</span></div>
         <div class="batt-bar"><div class="batt-fill" id="batt-fill" style="width:0%"></div></div>
       </div>
       <div class="card-sm">
@@ -406,6 +406,8 @@ background:linear-gradient(90deg,var(--primary),var(--secondary));opacity:0.6}
         var volts=d.battery_voltage!=null?d.battery_voltage:0;
         setText('batt-pct', volts>2?pct+'%':'N/A');
         setText('batt-volts', volts>2?volts.toFixed(2):'—');
+        var chgEl=document.getElementById('batt-charging');
+        if(chgEl) chgEl.style.display=d.battery_charging?'inline':'';
         var fill=document.getElementById('batt-fill');
         if(fill){
           fill.style.width=pct+'%';
