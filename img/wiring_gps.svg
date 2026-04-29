@@ -134,14 +134,14 @@
   <line x1="265" y1="393" x2="490" y2="393" stroke="#8e44ad" stroke-width="2"/>
   <polygon points="480,388.5 490,393 480,397.5" fill="#8e44ad"/>
 
-  <line x1="265" y1="417" x2="490" y2="417" stroke="#8e44ad" stroke-width="2"/>
-  <polygon points="480,412.5 490,417 480,421.5" fill="#8e44ad"/>
+  <line x1="265" y1="417" x2="490" y2="393" stroke="#8e44ad" stroke-width="2"/>
+  <polygon points="490,393 480.4,397.5 479.7,390.6" fill="#8e44ad"/>
 
-  <line x1="265" y1="441" x2="490" y2="441" stroke="#8e44ad" stroke-width="2"/>
-  <polygon points="480,436.5 490,441 480,445.5" fill="#8e44ad"/>
+  <line x1="265" y1="441" x2="490" y2="393" stroke="#8e44ad" stroke-width="2"/>
+  <polygon points="490,393 480.7,398.5 479.2,391.7" fill="#8e44ad"/>
 
-  <line x1="265" y1="465" x2="490" y2="465" stroke="#8e44ad" stroke-width="2"/>
-  <polygon points="480,460.5 490,465 480,470.5" fill="#8e44ad"/>
+  <line x1="265" y1="465" x2="490" y2="393" stroke="#8e44ad" stroke-width="2"/>
+  <polygon points="490,393 481.2,399.4 478.8,392.9" fill="#8e44ad"/>
 
   <!-- Junction dot at GPS VCC -->
   <circle cx="490" cy="393" r="5" fill="#2980b9"/>
