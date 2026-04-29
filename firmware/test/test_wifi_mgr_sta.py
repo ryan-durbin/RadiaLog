@@ -67,7 +67,7 @@ test("WifiCredentials has priority field", re.search(r'uint8_t\s+priority', head
 # 3. Multi-network support
 # -----------------------------------------------------------------------
 print("\n[3] Multi-network support")
-test("MAX_NETWORKS = 3 defined", "MAX_NETWORKS = 3" in header)
+test("MAX_NETWORKS = 4 defined", "MAX_NETWORKS = 4" in header)
 test("setNetworks() method declared", "setNetworks(" in header)
 test("setNetworks accepts vector", re.search(r'setNetworks\s*\(\s*const\s+std::vector', header) is not None)
 test("networks array in header", re.search(r'_networks\s*\[', header) is not None)
@@ -165,6 +165,8 @@ test("getAPIP() still present", "getAPIP()" in header and "getAPIP()" in source)
 test("softAP called in source", "softAP(" in source)
 test("10.0.0.1 portal IP configured", "10, 0, 0, 1" in source)
 test("AP_CHANNEL used", "AP_CHANNEL" in source)
+test("AP re-enable is scheduled on STA disconnect", "_apEnablePending = true" in source)
+test("AP auto-off is blocked while STA is disconnected", "!isSTAConnected()" in source)
 
 # -----------------------------------------------------------------------
 # Summary

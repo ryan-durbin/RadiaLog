@@ -13,17 +13,6 @@
 static constexpr int DW = DISPLAY_WIDTH;
 static constexpr int DH = DISPLAY_HEIGHT;
 
-// LovyanGFX text datum compatibility (same values as TFT_eSPI)
-#ifdef DISPLAY_DRIVER_LGFX
-#ifndef TL_DATUM
-#define TL_DATUM lgfx::textdatum::top_left
-#define TC_DATUM lgfx::textdatum::top_center
-#define TR_DATUM lgfx::textdatum::top_right
-#define MC_DATUM lgfx::textdatum::middle_center
-#define BC_DATUM lgfx::textdatum::bottom_center
-#endif
-#endif
-
 // Color palette (RGB565)
 static const uint16_t COL_BG      = 0x0000;  // Black
 static const uint16_t COL_TITLE   = 0xFFFF;  // White
@@ -82,8 +71,12 @@ void Display::begin() {
     digitalWrite(TFT_POWER_PIN, HIGH);
 #endif
 
-    // Backlight pin
+#if defined(DISPLAY_DRIVER_LGFX) || defined(DISPLAY_DRIVER_ARDUINO_GFX)
+    // LovyanGFX / Arduino_GFX manage backlight via display command — do NOT set pinMode/digitalWrite
+#else
+    // Backlight pin (TFT_eSPI: direct GPIO or PWM)
     pinMode(TFT_BL_PIN, OUTPUT);
+#endif
 
     // Buttons with internal pullup
 #ifdef HAS_BUTTON
@@ -192,12 +185,21 @@ void Display::handleButton() {
 void Display::_wake() {
     _on = true;
     _wakeTime = millis();
+#if defined(DISPLAY_DRIVER_LGFX) || defined(DISPLAY_DRIVER_ARDUINO_GFX)
+    // LovyanGFX / Arduino_GFX: use setBrightness for display-command backlight control
+    _tft.setBrightness(200);
+#else
     digitalWrite(TFT_BL_PIN, HIGH);
+#endif
 }
 
 void Display::_sleep() {
     _on = false;
+#if defined(DISPLAY_DRIVER_LGFX) || defined(DISPLAY_DRIVER_ARDUINO_GFX)
+    _tft.setBrightness(0);
+#else
     digitalWrite(TFT_BL_PIN, LOW);
+#endif
 }
 
 // =============================================================================
@@ -240,7 +242,7 @@ void Display::_drawRectangular(const DisplayStatus& s) {
     const int lineW   = DW - 2 * margin;            // separator width
 
     // Draw into the persistent off-screen sprite, then push once — no flicker
-    TFT_eSprite& fb = _sprite;
+    GfxSprite& fb = _sprite;
     fb.fillSprite(COL_BG);
     fb.setTextDatum(TL_DATUM);
 
@@ -453,7 +455,7 @@ void Display::_drawCircular(const DisplayStatus& s) {
     const int cy = DH / 2;   // center Y
     const int r  = DW / 2;   // radius
 
-    TFT_eSprite& fb = _sprite;
+    GfxSprite& fb = _sprite;
     fb.fillSprite(COL_BG);
 
     // Draw a subtle circle border to frame the display

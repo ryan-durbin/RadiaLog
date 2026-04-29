@@ -70,14 +70,26 @@ class TestApAutoOffTimer(unittest.TestCase):
     """Test AP auto-shutdown timer logic."""
 
     def test_auto_off_after_timeout(self):
-        """AP should disable after AP_AUTO_OFF_MS with no clients."""
+        """AP should disable after AP_AUTO_OFF_MS with no clients while STA is connected."""
         last_client_seen = 0
         current_time = AP_AUTO_OFF_MS + 1  # just past timeout
+        sta_connected = True
 
         elapsed = current_time - last_client_seen
-        should_disable = elapsed >= AP_AUTO_OFF_MS
+        should_disable = sta_connected and elapsed >= AP_AUTO_OFF_MS
 
         self.assertTrue(should_disable)
+
+    def test_auto_off_not_triggered_without_sta(self):
+        """AP should stay active as fallback while STA is disconnected."""
+        last_client_seen = 0
+        current_time = AP_AUTO_OFF_MS + 1
+        sta_connected = False
+
+        elapsed = current_time - last_client_seen
+        should_disable = sta_connected and elapsed >= AP_AUTO_OFF_MS
+
+        self.assertFalse(should_disable)
 
     def test_auto_off_not_triggered_with_clients(self):
         """AP should stay active while clients are connected."""
@@ -150,8 +162,8 @@ class TestMaxNetworks(unittest.TestCase):
     """Test WiFi network limit enforcement."""
 
     def test_max_networks_limit(self):
-        """WifiMgr supports up to MAX_NETWORKS (3) networks."""
-        MAX_NETWORKS = 3
+        """WifiMgr supports up to MAX_NETWORKS (4) networks."""
+        MAX_NETWORKS = 4
         extra_networks = [f'Extra{i}' for i in range(5)]
 
         # Only first MAX_NETWORKS should be kept

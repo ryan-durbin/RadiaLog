@@ -15,6 +15,8 @@
     --gnd: #333;
     --card: #fafafa;
     --border: #ddd;
+    --opt-b: #f39c12;
+    --gpio: #8e44ad;
   }
   * { box-sizing: border-box; }
   body {
@@ -53,6 +55,24 @@
     background: #fff6e6; border-left: 4px solid var(--pwr);
     padding: 10px 14px; border-radius: 4px; font-size: 13px; margin-top: 10px;
   }
+  .callout-green {
+    background: #eafaf1; border-left: 4px solid var(--mcu);
+    padding: 10px 14px; border-radius: 4px; font-size: 13px; margin-top: 10px;
+  }
+  .callout-purple {
+    background: #f5eef8; border-left: 4px solid var(--gpio);
+    padding: 10px 14px; border-radius: 4px; font-size: 13px; margin-top: 10px;
+  }
+  .option-label {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 3px;
+    margin-bottom: 6px;
+  }
+  .option-simple { background: #eafaf1; color: var(--mcu); }
+  .option-advanced { background: #fef9e7; color: var(--opt-b); }
   @media print {
     body { padding: 12mm; }
     .section { page-break-inside: avoid; }
@@ -70,60 +90,63 @@
 <!-- ========== GPS WIRING ========== -->
 <section class="section">
   <h2>1. GPS Module (ATGM336H)</h2>
-  <div class="card">
-    <svg viewBox="0 0 780 280" width="100%" style="max-width: 780px; display: block; margin: 0 auto;" xmlns="http://www.w3.org/2000/svg">
-      <!-- XIAO ESP32S3 Plus -->
-      <rect x="40" y="60" width="230" height="200" rx="10" fill="#eafaf1" stroke="#27ae60" stroke-width="2"/>
-      <text x="155" y="85" text-anchor="middle" font-size="14" font-weight="700" fill="#27ae60">XIAO ESP32S3 Plus</text>
-      <line x1="55" y1="95" x2="255" y2="95" stroke="#27ae60" stroke-width="1"/>
 
-      <g font-size="12" fill="#1a1a1a">
-        <text x="260" y="130" text-anchor="end">D6 (TX)</text>
-        <text x="260" y="165" text-anchor="end">D7 (RX)</text>
-        <text x="260" y="200" text-anchor="end">3V3</text>
-        <text x="260" y="235" text-anchor="end">GND</text>
+  <!-- Option A: Simple -->
+  <span class="option-label option-simple">Option A — Recommended</span>
+  <div class="card" style="margin-bottom: 16px;">
+    <svg viewBox="0 0 780 240" width="100%" style="max-width: 780px; display: block; margin: 0 auto;" xmlns="http://www.w3.org/2000/svg">
+      <!-- XIAO ESP32S3 Plus -->
+      <rect x="40" y="50" width="210" height="160" rx="8" fill="#eafaf1" stroke="#27ae60" stroke-width="2"/>
+      <text x="145" y="73" text-anchor="middle" font-size="13" font-weight="700" fill="#27ae60">XIAO ESP32S3 Plus</text>
+      <line x1="53" y1="82" x2="237" y2="82" stroke="#27ae60" stroke-width="1"/>
+
+      <g font-size="11" fill="#1a1a1a">
+        <text x="243" y="110" text-anchor="end">D6 (TX)</text>
+        <text x="243" y="138" text-anchor="end">D7 (RX)</text>
+        <text x="243" y="166" text-anchor="end">3V3</text>
+        <text x="243" y="194" text-anchor="end">GND</text>
       </g>
       <g fill="#27ae60">
-        <circle cx="270" cy="127" r="4"/>
-        <circle cx="270" cy="162" r="4"/>
-        <circle cx="270" cy="197" r="4"/>
-        <circle cx="270" cy="232" r="4"/>
+        <circle cx="253" cy="107" r="3.5"/>
+        <circle cx="253" cy="135" r="3.5"/>
+        <circle cx="253" cy="163" r="3.5"/>
+        <circle cx="253" cy="191" r="3.5"/>
       </g>
 
       <!-- ATGM336H GPS -->
-      <rect x="510" y="60" width="220" height="200" rx="10" fill="#eaf2fb" stroke="#2980b9" stroke-width="2"/>
-      <text x="620" y="85" text-anchor="middle" font-size="14" font-weight="700" fill="#2980b9">ATGM336H GPS</text>
-      <line x1="525" y1="95" x2="715" y2="95" stroke="#2980b9" stroke-width="1"/>
+      <rect x="480" y="50" width="200" height="160" rx="8" fill="#eaf2fb" stroke="#2980b9" stroke-width="2"/>
+      <text x="580" y="73" text-anchor="middle" font-size="13" font-weight="700" fill="#2980b9">ATGM336H GPS</text>
+      <line x1="493" y1="82" x2="667" y2="82" stroke="#2980b9" stroke-width="1"/>
 
-      <g font-size="12" fill="#1a1a1a">
-        <text x="520" y="130" text-anchor="start">RX</text>
-        <text x="520" y="165" text-anchor="start">TX</text>
-        <text x="520" y="200" text-anchor="start">VCC</text>
-        <text x="520" y="235" text-anchor="start">GND</text>
+      <g font-size="11" fill="#1a1a1a">
+        <text x="490" y="110" text-anchor="start">RX</text>
+        <text x="490" y="138" text-anchor="start">TX</text>
+        <text x="490" y="166" text-anchor="start">VCC</text>
+        <text x="490" y="194" text-anchor="start">GND</text>
       </g>
       <g fill="#2980b9">
-        <circle cx="510" cy="127" r="4"/>
-        <circle cx="510" cy="162" r="4"/>
-        <circle cx="510" cy="197" r="4"/>
-        <circle cx="510" cy="232" r="4"/>
+        <circle cx="480" cy="107" r="3.5"/>
+        <circle cx="480" cy="135" r="3.5"/>
+        <circle cx="480" cy="163" r="3.5"/>
+        <circle cx="480" cy="191" r="3.5"/>
       </g>
 
       <!-- Wires -->
-      <line x1="270" y1="127" x2="510" y2="127" stroke="#c0392b" stroke-width="2"/>
-      <polygon points="500,123 510,127 500,131" fill="#c0392b"/>
-      <text x="390" y="120" text-anchor="middle" font-size="10" fill="#c0392b">UART TX → RX</text>
+      <line x1="253" y1="107" x2="480" y2="107" stroke="#c0392b" stroke-width="2"/>
+      <polygon points="470,103.5 480,107 470,110.5" fill="#c0392b"/>
+      <text x="366" y="100" text-anchor="middle" font-size="9" fill="#c0392b">TX → RX</text>
 
-      <line x1="270" y1="162" x2="510" y2="162" stroke="#c0392b" stroke-width="2"/>
-      <polygon points="280,158 270,162 280,166" fill="#c0392b"/>
-      <text x="390" y="155" text-anchor="middle" font-size="10" fill="#c0392b">UART RX ← TX</text>
+      <line x1="253" y1="135" x2="480" y2="135" stroke="#c0392b" stroke-width="2"/>
+      <polygon points="263,131.5 253,135 263,138.5" fill="#c0392b"/>
+      <text x="366" y="128" text-anchor="middle" font-size="9" fill="#c0392b">RX ← TX</text>
 
-      <line x1="270" y1="197" x2="510" y2="197" stroke="#e67e22" stroke-width="2.5"/>
-      <polygon points="500,192 510,197 500,202" fill="#e67e22"/>
-      <text x="390" y="190" text-anchor="middle" font-size="10" fill="#e67e22" font-weight="600">+3.3V Power</text>
+      <line x1="253" y1="163" x2="480" y2="163" stroke="#e67e22" stroke-width="2.5"/>
+      <polygon points="470,158.5 480,163 470,167.5" fill="#e67e22"/>
+      <text x="366" y="156" text-anchor="middle" font-size="9" fill="#e67e22" font-weight="600">+3.3V</text>
 
-      <line x1="270" y1="232" x2="510" y2="232" stroke="#333" stroke-width="2.5"/>
-      <polygon points="500,227 510,232 500,237" fill="#333"/>
-      <text x="390" y="225" text-anchor="middle" font-size="10" fill="#333" font-weight="600">Ground</text>
+      <line x1="253" y1="191" x2="480" y2="191" stroke="#333" stroke-width="2.5"/>
+      <polygon points="470,186.5 480,191 470,195.5" fill="#333"/>
+      <text x="366" y="184" text-anchor="middle" font-size="9" fill="#333" font-weight="600">GND</text>
     </svg>
 
     <table class="pins">
@@ -136,16 +159,111 @@
       </tbody>
     </table>
 
-    <div class="callout">
-      <strong>GPS sleep</strong> is handled in software. Before entering deep sleep,
-      the firmware sends the ATGM336H a <code>$PMTK161,0</code> backup-mode command
-      over UART, which drops its draw from ~25 mA to roughly 10–50 µA while VCC stays
-      applied. No hardware power-control pin is required.
+    <div class="callout-green">
+      <strong>Simple wiring — no extra soldering.</strong> Power management is software-only: the firmware sends a
+      <code>$PMTK161,0</code> backup-mode command over UART before deep sleep, dropping GPS draw to ~10–50 µA.
     </div>
 
     <div class="legend">
       <span><span class="swatch" style="background:#c0392b"></span> UART data</span>
       <span><span class="swatch" style="background:#e67e22"></span> +3.3V power</span>
+      <span><span class="swatch" style="background:#333"></span> Ground</span>
+    </div>
+  </div>
+
+  <!-- Option B: Advanced -->
+  <span class="option-label option-advanced">Option B — Advanced (GPIO Power Control)</span>
+  <div class="card">
+    <svg viewBox="0 0 780 260" width="100%" style="max-width: 780px; display: block; margin: 0 auto;" xmlns="http://www.w3.org/2000/svg">
+      <!-- XIAO ESP32S3 Plus -->
+      <rect x="40" y="50" width="210" height="200" rx="8" fill="#eafaf1" stroke="#27ae60" stroke-width="2"/>
+      <text x="145" y="73" text-anchor="middle" font-size="13" font-weight="700" fill="#27ae60">XIAO ESP32S3 Plus</text>
+      <line x1="53" y1="82" x2="237" y2="82" stroke="#27ae60" stroke-width="1"/>
+
+      <g font-size="11" fill="#1a1a1a">
+        <text x="243" y="105" text-anchor="end">D6 (TX)</text>
+        <text x="243" y="130" text-anchor="end">D7 (RX)</text>
+        <text x="243" y="155" text-anchor="end">D14 (GPIO41)</text>
+        <text x="243" y="176" text-anchor="end">D4  (GPIO5)</text>
+        <text x="243" y="197" text-anchor="end">D15 (GPIO42)</text>
+        <text x="243" y="218" text-anchor="end">D5  (GPIO6)</text>
+      </g>
+      <g fill="#27ae60">
+        <circle cx="253" cy="102" r="3.5"/>
+        <circle cx="253" cy="127" r="3.5"/>
+        <circle cx="253" cy="152" r="3.5"/>
+        <circle cx="253" cy="173" r="3.5"/>
+        <circle cx="253" cy="194" r="3.5"/>
+        <circle cx="253" cy="215" r="3.5"/>
+      </g>
+
+      <!-- ATGM336H GPS -->
+      <rect x="480" y="50" width="200" height="200" rx="8" fill="#eaf2fb" stroke="#2980b9" stroke-width="2"/>
+      <text x="580" y="73" text-anchor="middle" font-size="13" font-weight="700" fill="#2980b9">ATGM336H GPS</text>
+      <line x1="493" y1="82" x2="667" y2="82" stroke="#2980b9" stroke-width="1"/>
+
+      <g font-size="11" fill="#1a1a1a">
+        <text x="490" y="105" text-anchor="start">RX</text>
+        <text x="490" y="130" text-anchor="start">TX</text>
+        <text x="490" y="162" text-anchor="start">VCC</text>
+        <text x="490" y="187" text-anchor="start">GND</text>
+      </g>
+      <g fill="#2980b9">
+        <circle cx="480" cy="102" r="3.5"/>
+        <circle cx="480" cy="127" r="3.5"/>
+        <circle cx="480" cy="159" r="3.5"/>
+        <circle cx="480" cy="184" r="3.5"/>
+      </g>
+
+      <!-- UART wires -->
+      <line x1="253" y1="102" x2="480" y2="102" stroke="#c0392b" stroke-width="2"/>
+      <polygon points="470,98.5 480,102 470,105.5" fill="#c0392b"/>
+      <text x="366" y="95" text-anchor="middle" font-size="9" fill="#c0392b">TX → RX</text>
+
+      <line x1="253" y1="127" x2="480" y2="127" stroke="#c0392b" stroke-width="2"/>
+      <polygon points="263,123.5 253,127 263,130.5" fill="#c0392b"/>
+      <text x="366" y="120" text-anchor="middle" font-size="9" fill="#c0392b">RX ← TX</text>
+
+      <!-- GPIO switched VCC wires (purple) -->
+      <line x1="253" y1="152" x2="480" y2="159" stroke="#8e44ad" stroke-width="2"/>
+      <circle cx="480" cy="159" r="5" fill="#2980b9"/>
+
+      <line x1="253" y1="173" x2="480" y2="159" stroke="#8e44ad" stroke-width="2"/>
+      <circle cx="480" cy="159" r="5" fill="#2980b9"/>
+
+      <line x1="253" y1="194" x2="480" y2="159" stroke="#8e44ad" stroke-width="2"/>
+      <circle cx="480" cy="159" r="5" fill="#2980b9"/>
+
+      <line x1="253" y1="215" x2="480" y2="159" stroke="#8e44ad" stroke-width="2"/>
+      <circle cx="480" cy="159" r="5" fill="#2980b9"/>
+
+      <!-- Power rail label -->
+      <text x="366" y="148" text-anchor="middle" font-size="9" fill="#8e44ad" font-weight="600">GPIO Switched VCC (×4 pins)</text>
+
+      <!-- GND wire -->
+      <line x1="253" y1="215" x2="480" y2="184" stroke="#333" stroke-width="2.5"/>
+      <polygon points="470,179 480,184 470,189" fill="#333"/>
+    </svg>
+
+    <table class="pins">
+      <thead><tr><th>XIAO Pin (silkscreen)</th><th>GPIO</th><th>Direction</th><th>GPS Pin</th><th>Purpose</th></tr></thead>
+      <tbody>
+        <tr><td><code>D6</code> (TX)</td><td>GPIO43</td><td>→</td><td>RX</td><td>UART data to GPS</td></tr>
+        <tr><td><code>D7</code> (RX)</td><td>GPIO44</td><td>←</td><td>TX</td><td>UART data from GPS (NMEA)</td></tr>
+        <tr><td><code>D14</code>, <code>D4</code>, <code>D15</code>, <code>D5</code></td><td>GPIO 41/5/42/6</td><td>→</td><td>VCC</td><td>Switchable power rail (bridged together)</td></tr>
+        <tr><td colspan="3" style="text-align:center">—</td><td>GND</td><td>Common ground</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout-purple">
+      <strong>Advanced soldering required.</strong> Four GPIO pins (D14/D4/D15/D5) are bridged together and connected to GPS VCC.
+      The firmware drives them HIGH on boot and LOW with hold enabled before deep sleep — cutting ~25 mA GPS drain to effectively 0 µA.
+      Pins D4/D5 share the I2C bus (unused since no display/I2C device is planned).
+    </div>
+
+    <div class="legend">
+      <span><span class="swatch" style="background:#c0392b"></span> UART data</span>
+      <span><span class="swatch" style="background:#8e44ad"></span> GPIO switched VCC (×4 pins)</span>
       <span><span class="swatch" style="background:#333"></span> Ground</span>
     </div>
   </div>
@@ -217,10 +335,10 @@
   <h2>3. GPS Power States at a Glance</h2>
   <div class="card">
     <table class="pins">
-      <thead><tr><th>State</th><th>ATGM336H</th><th>Approx. current</th></tr></thead>
+      <thead><tr><th>State</th><th>Option A (Simple)</th><th>Option B (GPIO Control)</th><th>Approx. current</th></tr></thead>
       <tbody>
-        <tr><td>Normal run (tracking)</td><td>ON</td><td>~25 mA</td></tr>
-        <tr><td>Deep sleep / shipping mode (after <code>$PMTK161,0</code>)</td><td>Backup</td><td>~10–50 µA</td></tr>
+        <tr><td>Normal run (tracking)</td><td>VCC ON</td><td>GPIO HIGH</td><td>~25 mA</td></tr>
+        <tr><td>Deep sleep / shipping mode</td><td>$PMTK161,0 backup</td><td>GPIO LOW + hold</td><td>~10–50 µA (A) · ~0 µA (B)</td></tr>
       </tbody>
     </table>
   </div>

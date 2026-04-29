@@ -5,7 +5,7 @@
 // =============================================================================
 // RadiaLog Firmware - WiFi Manager Implementation
 // ESP32 WIFI_AP_STA dual mode:
-//   AP:  RadiaLog-XXXX on boot, auto-disables after 5 min with no clients
+//   AP:  RadiaLog-XXXX on boot, auto-disables only while STA is connected
 //   STA: connects to configured networks (priority order), auto-reconnects
 //   Power: WIFI_PS_MIN_MODEM enabled for STA power saving
 // =============================================================================
@@ -26,7 +26,9 @@ WifiMgr::WifiMgr()
     , _onConnectCb(nullptr)
     , _onDisconnectCb(nullptr)
     , _apActive(false)
+    , _apEnablePending(false)
     , _apLastClientSeen(0)
+    , _apPassword("")
 {
     _instance = this;
 }
@@ -46,9 +48,8 @@ void WifiMgr::begin(const String& apPassword) {
     WiFi.onEvent(_wifiEventHandler);
 
     // Build AP SSID and configure AP
-    _setupAP(apPassword);
-    _apActive = true;
-    _apLastClientSeen = millis();   // grace period starts at boot
+    _apPassword = apPassword;
+    _enableAP();
 }
 
 // -----------------------------------------------------------------------------
@@ -57,6 +58,15 @@ void WifiMgr::begin(const String& apPassword) {
 
 void WifiMgr::update() {
     unsigned long now = millis();
+
+    // Bring the local portal back after STA drops. This is handled here rather
+    // than inside the WiFi event callback so AP setup stays in the main loop.
+    if (_apEnablePending || (!_apActive && !isSTAConnected())) {
+        _apEnablePending = false;
+        if (!_enableAP()) {
+            _apEnablePending = true;
+        }
+    }
 
     // Check if an ongoing connection attempt has timed out
     if (_connectingNow) {
@@ -80,7 +90,8 @@ void WifiMgr::update() {
         }
     }
 
-    // AP auto-shutdown after AP_AUTO_OFF_MS with no connected clients
+    // AP auto-shutdown after AP_AUTO_OFF_MS with no connected clients, but only
+    // while STA is connected. Offline STA keeps AP available as fallback.
     _checkAPAutoOff();
 }
 
@@ -111,6 +122,7 @@ void WifiMgr::connectSTA() {
     _currentNetworkIndex = 0;
     _reconnectPending = false;
     _reconnectDelay = RECONNECT_DELAY_MIN_MS;
+    WiFi.mode(WIFI_AP_STA);
     _tryNextNetwork();
 }
 
@@ -163,6 +175,10 @@ void WifiMgr::registerOnDisconnect(WifiEventCallback cb) {
 void WifiMgr::_tryNextNetwork() {
     if (_networkCount == 0) return;
 
+    while (_currentNetworkIndex < _networkCount && _networks[_currentNetworkIndex].ssid.length() == 0) {
+        _currentNetworkIndex++;
+    }
+
     if (_currentNetworkIndex >= _networkCount) {
         // Exhausted all networks — schedule reconnect with backoff
         _reconnectPending = true;
@@ -187,23 +203,59 @@ void WifiMgr::_tryNextNetwork() {
 // Private: _setupAP
 // -----------------------------------------------------------------------------
 
-void WifiMgr::_setupAP(const String& password) {
+bool WifiMgr::_setupAP(const String& password) {
     _apSsid = _buildAPSsid();
 
     // Configure AP IP address (portal: 10.0.0.1)
     IPAddress apIP(10, 0, 0, 1);
     IPAddress gateway(10, 0, 0, 1);
     IPAddress subnet(255, 255, 255, 0);
-    WiFi.softAPConfig(apIP, gateway, subnet);
+    if (!WiFi.softAPConfig(apIP, gateway, subnet)) {
+        Serial.println(F("[WiFi] AP IP configuration failed."));
+    }
 
-    // Start AP (open network if password is empty)
-    if (password.length() > 0) {
-        WiFi.softAP(_apSsid.c_str(), password.c_str(), AP_CHANNEL);
+    // ESP32 softAP WPA passwords must be 8-63 chars. If a bad value was saved,
+    // fall back to open AP so the portal remains reachable for recovery.
+    bool usePassword = password.length() >= 8 && password.length() <= 63;
+    bool started = false;
+    if (usePassword) {
+        started = WiFi.softAP(_apSsid.c_str(), password.c_str(), AP_CHANNEL);
     } else {
-        WiFi.softAP(_apSsid.c_str(), nullptr, AP_CHANNEL);
+        if (password.length() > 0) {
+            Serial.println(F("[WiFi] Ignoring invalid AP password length; starting open AP."));
+        }
+        started = WiFi.softAP(_apSsid.c_str(), nullptr, AP_CHANNEL);
+    }
+
+    if (!started && usePassword) {
+        Serial.println(F("[WiFi] Password-protected AP failed; retrying open AP."));
+        started = WiFi.softAP(_apSsid.c_str(), nullptr, AP_CHANNEL);
+    }
+
+    if (!started) {
+        _apIP = IPAddress();
+        Serial.println(F("[WiFi] AP start failed."));
+        return false;
     }
 
     _apIP = WiFi.softAPIP();
+    return true;
+}
+
+bool WifiMgr::_enableAP() {
+    if (_apActive) return true;
+
+    WiFi.mode(WIFI_AP_STA);
+    if (!_setupAP(_apPassword)) {
+        _apActive = false;
+        return false;
+    }
+
+    _apActive = true;
+    _apLastClientSeen = millis();   // grace period starts when AP comes up
+    Serial.print(F("[WiFi] AP enabled: "));
+    Serial.println(_apSsid);
+    return true;
 }
 
 String WifiMgr::_buildAPSsid() {
@@ -224,6 +276,13 @@ String WifiMgr::_buildAPSsid() {
 void WifiMgr::_checkAPAutoOff() {
     if (!_apActive) return;
 
+    // Keep the portal reachable whenever STA is offline. If the home network is
+    // lost, the AP is the only management path back into the device.
+    if (!isSTAConnected()) {
+        _apLastClientSeen = millis();
+        return;
+    }
+
     if (WiFi.softAPgetStationNum() > 0) {
         // Someone is connected — keep resetting the timer
         _apLastClientSeen = millis();
@@ -235,7 +294,7 @@ void WifiMgr::_checkAPAutoOff() {
         WiFi.softAPdisconnect(true);   // stop AP, release radio resources
         WiFi.mode(WIFI_STA);           // switch to STA-only mode
         _apActive = false;
-        Serial.println(F("[WiFi] AP disabled (no clients for 5 min). Reset to re-enable."));
+        Serial.println(F("[WiFi] AP disabled (no clients for 5 min while STA online)."));
     }
 }
 
@@ -262,6 +321,9 @@ void WifiMgr::_wifiEventHandler(WiFiEvent_t event, WiFiEventInfo_t info) {
             // STA lost connection — schedule non-blocking reconnect
             _instance->_staConnected = false;
             _instance->_connectingNow = false;
+            if (!_instance->_apActive) {
+                _instance->_apEnablePending = true;
+            }
             _instance->_currentNetworkIndex = 0; // retry from highest priority
             _instance->_reconnectPending = true;
             _instance->_reconnectAt = millis() + _instance->_reconnectDelay;

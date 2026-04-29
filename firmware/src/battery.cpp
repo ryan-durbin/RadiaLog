@@ -1,5 +1,7 @@
 #include "battery.h"
 
+#ifndef BATTERY_TYPE_AXP2101
+
 // =============================================================================
 // RadiaLog Firmware - Battery Voltage Monitor Implementation
 // Uses analogReadMilliVolts() for calibrated ADC reading with oversampling.
@@ -57,3 +59,5 @@ uint8_t Battery::getPercent() const {
         (BATTERY_FULL_MV - BATTERY_EMPTY_MV)
     );
 }
+
+#endif // BATTERY_TYPE_AXP2101

@@ -255,7 +255,7 @@ GPS Module ─────────────┘
 
 - **CPU runs at 80MHz** (down from 240MHz) — all peripherals use hardware clock dividers, unaffected
 - **Light sleep** kicks in during idle periods between readings (ESP-IDF automatic frequency scaling)
-- **WiFi AP auto-disables** after 5 minutes with no connected clients — saves 40-60mA. Tap the restart button to bring it back.
+- **WiFi AP auto-disables** after 5 minutes with no connected clients while STA is online — saves 40-60mA. If home WiFi drops, the AP comes back and stays available as the recovery path.
 - **WIFI_PS_MIN_MODEM** enabled — radio sleeps between DTIM beacons in STA mode
 - **Shipping mode** — press and hold the boot button (through the hole in the case side) for 5–10 seconds to enter deep sleep. The LED flashes three times as confirmation, then the device draws negligible power (~10 µA). Tap the restart button on the lid to wake it up again.
 - **GPS backup mode** — before entering deep sleep, the firmware sends the ATGM336H a `$PMTK161,0` command (Option A) or cuts VCC via GPIO hold (Option B), dropping GPS draw from ~25 mA to ~10–50 µA (A) or ~0 µA (B). See [GPS Sleep Mode](#gps-sleep-mode) for details.
@@ -325,7 +325,8 @@ RadiaLog uploads readings in batches of up to 250 per request. Each reading incl
 - Uploads are scheduled once daily — use "Force Upload" in the portal for immediate upload
 
 ### Can't connect to RadiaLog WiFi
-- The AP auto-disables after 5 minutes with no clients to save power
+- The AP auto-disables after 5 minutes with no clients while RadiaLog is connected to home WiFi
+- If home WiFi drops, the AP should come back automatically and stay available as the recovery path
 - Press the **restart button** on the lid to reboot and bring the AP back
 - Default SSID is `RadiaLog-XXXX` (last 4 hex digits of the board's MAC address)
 
